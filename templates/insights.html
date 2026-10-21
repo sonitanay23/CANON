@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Rule insights{% endblock %}
+{% block body %}
+{% set admin = me.role == 'admin' %}
+{% set unclear = stats|selectattr('state','equalto','unclear')|list %}
+<div class="page-head">
+  <div><div class="eyebrow">Guideline debugger</div><h1>Which rules are people fighting?</h1>
+    <p>Every time someone keeps their original text, they give a reason. When a rule is overridden in {{ rate }}% or more of at least {{ min_n }} decisions, the rule is probably unclear, not the writers. Canon flags it so the brand team can fix the rule.</p></div>
+</div>
+
+<div class="grid g3" style="margin-bottom:1rem">
+  <div class="card stat"><div class="n">{{ unclear|length }}</div><div class="l">rule{{ 's' if unclear|length != 1 }} flagged as unclear</div></div>
+  <div class="card"><h3>Most-raised issues</h3>
+    {% for r in by_ref %}<div class="row spread" style="padding:.2rem 0"><small><span class="chip">{{ r.ref }}</span> {{ names.get(r.ref, '') }}</small><b>{{ r.n }}</b></div>{% else %}<small>No checks run yet.</small>{% endfor %}</div>
+  <div class="card"><h3>Issues by team</h3>
+    {% for r in by_team %}<div class="row spread" style="padding:.2rem 0"><small>{{ r.team }}</small><b>{{ r.n }}</b></div>{% else %}<small>No checks run yet.</small>{% endfor %}</div>
+</div>
+
+<div class="card">
+  <div class="table-wrap"><table>
+    <thead><tr><th>Rule</th><th>Decisions</th><th style="width:28%">Overridden</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for s in stats if s.total %}
+    <tr id="{{ s.rule.id }}">
+      <td><span class="chip">{{ s.rule.id }}</span> <b>{{ s.rule.title }}</b><div><small>{{ s.rule.text }}</small></div></td>
+      <td>{{ s.total }}</td>
+      <td><div class="row" style="flex-wrap:nowrap"><div class="meter {{ 'warn' if s.state == 'unclear' }}" style="flex:1"><span style="width:{{ (s.rate*100)|round|int }}%"></span></div><b>{{ (s.rate*100)|round|int }}%</b></div>
+        <small>{{ s.overrides }} of {{ s.total }}</small></td>
+      <td>{% if s.state == 'unclear' %}<span class="badge high">Unclear rule</span>
+          {% elif s.state == 'too few decisions' %}<span class="badge">Too few decisions</span><div><small>Needs {{ min_n }}+ before drawing conclusions</small></div>
+          {% else %}<span class="badge ok">Healthy</span>{% endif %}</td>
+    </tr>
+    {% if s.state == 'unclear' %}
+    <tr><td colspan="4" style="background:#fcfbf8">
+      <div class="grid g2">
+        <div><h3>Why people kept their original text</h3>
+          {% for reason, n in group_reasons(s.reasons) %}<div class="row spread" style="padding:.15rem 0"><span>“{{ reason }}”</span>{% if n > 1 %}<span class="count">×{{ n }}</span>{% endif %}</div>{% endfor %}
+        </div>
+        <div>
+          {% if s.rewrite and s.rewrite.status == 'proposed' %}
+            <h3>Proposed clearer rule <span class="badge ai">AI draft</span></h3>
+            {% if s.rewrite.summary %}<p><small>{{ s.rewrite.summary }}</small></p>{% endif %}
+            {% if admin %}
+            <form method="post" action="{{ url_for('rewrite', rid=s.rule.id) }}">
+              <textarea name="text" rows="5">{{ s.rewrite.proposal }}</textarea>
+              <div class="row" style="margin-top:.4rem"><button class="btn small primary" name="action" value="approve">Approve and update rule</button>
+                <button class="btn small ghost" name="action" value="dismiss">Dismiss</button></div>
+            </form>
+            {% else %}<p class="doc" style="font-size:.95rem">{{ s.rewrite.proposal }}</p><small>A brand admin decides whether to adopt it.</small>{% endif %}
+          {% elif s.rewrite and s.rewrite.status == 'approved' %}
+            <h3>Rule updated</h3><p><small>The clearer wording is now live. Override rates will be tracked against it from here.</small></p>
+          {% elif admin %}
+            <h3>Fix the rule</h3>
+            <form method="post" action="{{ url_for('propose', rid=s.rule.id) }}"><button class="btn small primary" {{ 'disabled' if not ai_on }}>Draft a clearer rule with AI</button></form>
+            <form method="post" action="{{ url_for('rewrite', rid=s.rule.id) }}" style="margin-top:.6rem">
+              <textarea name="text" rows="3" placeholder="Or write the clearer rule yourself">{{ s.rule.text }}</textarea>
+              <button class="btn small" name="action" value="approve" style="margin-top:.4rem">Save clearer wording</button>
+            </form>
+          {% else %}<small>A brand admin can rewrite this rule.</small>{% endif %}
+        </div>
+      </div>
+    </td></tr>
+    {% endif %}
+    {% endfor %}
+    </tbody></table></div>
+  <p class="hint">Rules with no decisions yet are not listed. The thresholds ({{ min_n }} decisions, {{ rate }}% overridden) stop Canon from drawing conclusions from a handful of cases.</p>
+</div>
+{% endblock %}

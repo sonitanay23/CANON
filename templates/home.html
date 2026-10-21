@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Brand governance before you publish{% endblock %}
+{% block body %}
+<section class="hero">
+  <div>
+    <div class="eyebrow">Brand governance, before you publish</div>
+    <h1>Catch brand mistakes before your customers do.</h1>
+    <p class="lede">Canon checks every draft against your approved rules and facts, explains each issue with the exact source behind it, and suggests the smallest fix that keeps what the writer meant. People make every final call.</p>
+    <div class="row" style="margin-top:1.2rem">
+      <a class="btn primary" href="{{ url_for('login') }}">Try the demo</a>
+      <a class="btn" href="{{ url_for('trust') }}">How Canon uses AI</a>
+    </div>
+  </div>
+  <div class="card">
+    <div class="eyebrow">Try this in 3 minutes</div>
+    <ol class="steps">
+      <li><b>Sign in as Riya (Creator)</b>Open <i>Diwali savings post</i> and click <b>Check</b>.</li>
+      <li><b>Open any highlighted issue</b>See why it was flagged, the exact rule or fact behind it, and a minimal fix. Accept it, edit it, or keep your text with a reason.</li>
+      <li><b>Sign in as Ananya (Admin)</b>In <b>Brand rules &amp; facts</b>, change the Velora Pro price from ₹499. Canon lists every approved piece that now needs updating.</li>
+    </ol>
+  </div>
+</section>
+
+<section class="grid g4" style="margin-bottom:2rem">
+  <div class="card stat"><div class="n">{{ stats.rules }}</div><div class="l">active brand rules</div></div>
+  <div class="card stat"><div class="n">{{ stats.facts }}</div><div class="l">approved facts in the ledger</div></div>
+  <div class="card stat"><div class="n">{{ stats.drafts }}</div><div class="l">pieces of content</div></div>
+  <div class="card stat"><div class="n">{{ stats.approved }}</div><div class="l">approved and watched for changes</div></div>
+</section>
+
+<section class="grid g3 pillars" style="margin-bottom:2rem">
+  <div class="card"><div class="kicker">Improvement 1</div><h3>Living fact ledger</h3><p class="muted">Every fact has an owner, a source and an expiry. Change one, and Canon finds every approved piece that still uses the old value, with fixes drafted.</p></div>
+  <div class="card"><div class="kicker">Improvement 2</div><h3>Guideline debugger</h3><p class="muted">When reviewers keep overriding a rule, the rule is probably unclear. Canon flags it and helps the brand team write a clearer version.</p></div>
+  <div class="card"><div class="kicker">Improvement 3</div><h3>Intent-first fixes</h3><p class="muted">Canon states what the writer meant, then changes only the flagged words. Nothing is applied without a click.</p></div>
+</section>
+
+<section class="card" id="accounts">
+  <div class="card-head"><div><h2>Demo accounts</h2><small>No password needed. Each account sees what its role allows.</small></div>
+    {% if me and me.role == 'admin' %}
+    <form method="post" action="{{ url_for('reset_demo') }}" onsubmit="return confirm('Reset all demo data to its starting state?')"><button class="btn small danger">Reset demo data</button></form>
+    {% endif %}
+  </div>
+  <form method="post" action="{{ url_for('login') }}" class="accounts">
+    {% for u in users %}
+    <button class="account" name="uid" value="{{ u.id }}">
+      <span class="avatar">{{ u.name.split()[0][0] }}{{ u.name.split()[-1][0] }}</span>
+      <span><b>{{ u.name }} · {{ role_labels[u.role] }}</b><small class="muted">{{ u.team }}</small></span>
+    </button>
+    {% endfor %}
+  </form>
+</section>
+{% endblock %}

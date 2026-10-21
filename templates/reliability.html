@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Reliability{% endblock %}
+{% block body %}
+{% if run and run.status == 'running' %}<meta http-equiv="refresh" content="3">{% endif %}
+<div class="page-head">
+  <div><div class="eyebrow">Reliability scorecard</div><h1>How accurate is Canon?</h1>
+    <p>We wrote {{ total }} test pieces with a fixed answer key: 15 with planted mistakes and 10 clean ones that should not be flagged. This page runs them through the same checks you use, against the demo brand's original rules and facts, and reports misses and false flags, not just hits.</p></div>
+  <form method="post" class="row">
+    <button class="btn" name="with_ai" value="" {{ 'disabled' if run and run.status == 'running' }}>Run rule engine only</button>
+    <button class="btn primary" name="with_ai" value="1" {{ 'disabled' if not ai_on or (run and run.status == 'running') }} title="{{ '' if ai_on else 'AI is off in this deployment' }}">Run with AI review</button>
+  </form>
+</div>
+
+{% if run and run.status == 'running' %}
+  <div class="card"><b>Running… {{ run.progress }} of {{ run.total }}</b><div class="meter" style="margin-top:.6rem"><span style="width:{{ (run.progress / run.total * 100)|round|int }}%"></span></div><small>This page refreshes on its own.</small></div>
+{% elif not summary %}
+  <div class="card empty"><div class="big">◎</div><b>No run yet.</b><br><small>Click a run button above. The rule-engine run takes a second{{ '; the AI run takes a minute or two' if ai_on }}.</small>
+  {% if run and run.status.startswith('failed') %}<p class="flash error" style="margin-top:1rem">The last run failed: {{ run.status }}</p>{% endif %}</div>
+{% else %}
+  <p><small>Latest run: {{ run.finished_at[:16] }} UTC · {{ 'rule engine + AI review' if run.with_ai else 'rule engine only' }}</small></p>
+  <div class="grid g4">
+    <div class="card stat"><div class="n">{{ (summary.detection*100)|round|int }}%</div><div class="l">planted issues caught ({{ summary.detected }} of {{ summary.expected }})</div></div>
+    <div class="card stat"><div class="n">{{ summary.rule_detected }}/{{ summary.rule_expected }}</div><div class="l">rule-detectable issues caught</div></div>
+    <div class="card stat"><div class="n">{{ summary.ai_detected }}/{{ summary.ai_expected }}</div><div class="l">tone &amp; claim issues caught {{ '(needs AI)' if not run.with_ai }}</div></div>
+    <div class="card stat"><div class="n">{{ summary.false_flags }}</div><div class="l">false flags ({{ (summary.false_share*100)|round|int }}% of {{ summary.flags }} flags); {{ summary.clean_flags }} on clean pieces</div></div>
+  </div>
+  {% if run.with_ai %}<p class="hint" style="margin-top:.6rem">{{ summary.ai_dropped }} AI suggestion{{ 's' if summary.ai_dropped != 1 }} dropped by validation for not quoting the text exactly or not citing a valid rule or fact.</p>{% endif %}
+  <div class="card" style="margin-top:1rem"><div class="table-wrap"><table>
+    <thead><tr><th>Test</th><th>Text</th><th>Expected</th><th>Canon found</th><th>Result</th></tr></thead>
+    <tbody>
+    {% for r in results %}
+    <tr>
+      <td><span class="chip">{{ r.id }}</span><div><small>{{ r.channel }}</small></div></td>
+      <td style="max-width:360px"><small>{{ r.text }}</small></td>
+      <td>{% for e in r.expect %}<span class="chip">{{ e }}</span> {% else %}<small class="faint">nothing (clean)</small>{% endfor %}</td>
+      <td>{% for f in r.found %}<span class="chip">{{ f }}</span> {% else %}<small class="faint">nothing</small>{% endfor %}</td>
+      <td>{% if r.missed %}<span class="badge high">missed {{ r.missed|join(', ') }}</span>{% endif %}
+          {% if r.extra %}<span class="badge medium">extra {{ r.extra|join(', ') }}</span>{% endif %}
+          {% if not r.missed and not r.extra %}<span class="badge ok">correct</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody></table></div></div>
+{% endif %}
+{% endblock %}

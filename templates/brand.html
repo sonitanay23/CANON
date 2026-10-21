@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Brand rules & facts{% endblock %}
+{% block body %}
+{% set admin = me.role == 'admin' %}
+<div class="page-head">
+  <div><div class="eyebrow">{{ brand }} · the source of truth</div><h1>Brand rules &amp; facts</h1>
+    <p>Every issue Canon raises points back to one of these. {% if admin %}Change a fact and Canon shows you every approved piece that still uses the old value.{% else %}Only brand admins can edit them.{% endif %}</p></div>
+</div>
+
+<section class="card" id="voice">
+  <h2>Brand voice</h2>
+  <p class="doc" style="font-size:1rem;line-height:1.7">{{ voice }}</p>
+  {% if admin %}<small>Confidential terms masked before any AI call: {{ terms|length }} term{{ 's' if terms|length != 1 }} ({% for t in terms %}<span class="chip">{{ t }}</span>{% if not loop.last %} {% endif %}{% endfor %}).</small>{% endif %}
+</section>
+
+<section class="card" id="facts">
+  <div class="card-head"><div><h2>Fact ledger</h2><small>Approved numbers, prices and claims. Each has an owner, a source and, where needed, an expiry date.</small></div></div>
+  {% if hidden %}<p class="flash info">{{ hidden }} internal fact{{ 's are' if hidden != 1 else ' is' }} hidden from agency partners and never sent to the AI for your drafts.</p>{% endif %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>ID</th><th>Fact</th><th>Approved value</th><th>Source · owner</th><th>Expires</th><th>Visible to</th>{% if admin %}<th>Change</th>{% endif %}</tr></thead>
+    <tbody>
+    {% for f in facts %}
+      {% set expired = f.expires_on and f.expires_on < today %}
+      <tr>
+        <td><span class="chip">{{ f.id }}</span></td>
+        <td><b>{{ f.label }}</b>{% if f.version > 1 %}<div><small>v{{ f.version }}</small></div>{% endif %}</td>
+        <td style="font-family:var(--serif);font-size:1.05rem">{{ f.value }}</td>
+        <td><small>{{ f.source }}<br>{{ f.owner }}</small></td>
+        <td>{% if f.expires_on %}<span class="badge {{ 'high' if expired else 'medium' }}">{{ 'Expired ' if expired }}{{ f.expires_on }}</span>{% else %}<small class="faint">—</small>{% endif %}</td>
+        <td><span class="badge {{ {'public':'ok','partner':'accent','internal':'medium'}[f.visibility] }}">{{ {'public':'Everyone','partner':'Team + agencies','internal':'Internal only'}[f.visibility] }}</span></td>
+        {% if admin %}<td style="min-width:220px">
+          <form method="post" action="{{ url_for('fact_update', fid=f.id) }}" class="row" style="flex-wrap:nowrap">
+            <input type="text" name="value" value="{{ f.value }}" aria-label="New value for {{ f.label }}" style="width:110px">
+            <input type="hidden" name="expires_on" value="{{ f.expires_on or '' }}">
+            <button class="btn small">Update</button>
+          </form></td>{% endif %}
+      </tr>
+    {% endfor %}
+    </tbody></table></div>
+  {% if changes %}
+  <h3 style="margin-top:1.25rem">Recent fact changes</h3>
+  {% for h in changes %}
+  <div class="item"><div><span class="chip">{{ h.fact_id }}</span> {{ h.label }}: <del>{{ h.old_value }}</del> → <ins>{{ h.new_value }}</ins> <small>· {{ h.name }} · {{ h.changed_at[:16] }}</small></div>
+    {% if me.role in ('admin','reviewer') %}<a class="btn small" href="{{ url_for('impact', hid=h.id) }}">See affected content</a>{% endif %}</div>
+  {% endfor %}
+  {% endif %}
+</section>
+
+<section class="card" id="rules">
+  <div class="card-head"><div><h2>Rules</h2><small>Rule-engine rules are checked by exact pattern. Tone and claim rules are checked by the AI and must be cited by ID.</small></div></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>ID</th><th>Rule</th><th>Checked by</th><th>Severity</th>{% if admin %}<th></th>{% endif %}</tr></thead>
+    <tbody>
+    {% for r in rules %}
+    <tr style="{{ 'opacity:.5' if not r.active }}">
+      <td><span class="chip">{{ r.id }}</span></td>
+      <td><b>{{ r.title }}</b><div><small>{{ r.text }}</small></div>
+        {% if admin %}<details><summary>Edit wording</summary>
+          <form method="post" action="{{ url_for('rule_update', rid=r.id) }}" style="margin-top:.4rem"><textarea name="text" rows="2">{{ r.text }}</textarea><button class="btn small" style="margin-top:.3rem">Save</button></form></details>{% endif %}</td>
+      <td>{% if r.type in ('tone','claim') %}<span class="badge ai">AI · {{ r.type }}</span>{% else %}<span class="badge rule">Rule engine · {{ r.type }}</span>{% endif %}</td>
+      <td><span class="badge {{ r.severity }}">{{ r.severity }}</span></td>
+      {% if admin %}<td><form method="post" action="{{ url_for('rule_update', rid=r.id) }}"><input type="hidden" name="toggle" value="1"><button class="btn small ghost">{{ 'Turn off' if r.active else 'Turn on' }}</button></form></td>{% endif %}
+    </tr>
+    {% endfor %}
+    </tbody></table></div>
+  {% if admin %}
+  <details style="margin-top:1rem"><summary>Add a rule</summary>
+    <form method="post" action="{{ url_for('rule_new') }}" class="grid g2" style="margin-top:.75rem">
+      <div class="field"><label>Type</label><select name="type">
+        <option value="banned">Banned word (rule engine)</option><option value="terminology">Preferred term (rule engine)</option>
+        <option value="tone">Tone (AI)</option><option value="claim">Claim (AI)</option></select></div>
+      <div class="field"><label>Severity</label><select name="severity"><option>low</option><option selected>medium</option><option>high</option></select></div>
+      <div class="field"><label>Title</label><input type="text" name="title" placeholder="e.g. Don't say 'hassle-free'"></div>
+      <div class="field"><label>Description</label><input type="text" name="text" placeholder="What the rule means, in one sentence"></div>
+      <div class="field"><label>Word to look for <small>(banned / preferred term)</small></label><input type="text" name="word" placeholder="hassle-free"></div>
+      <div class="field"><label>Suggested replacement</label><input type="text" name="replacement" placeholder="simple"></div>
+      <div><button class="btn primary">Add rule</button></div>
+    </form></details>
+  {% endif %}
+</section>
+{% endblock %}

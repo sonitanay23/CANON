@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}How Canon uses AI{% endblock %}
+{% block body %}
+<div style="max-width:820px">
+  <div class="eyebrow">Trust &amp; data handling</div>
+  <h1>How Canon uses AI</h1>
+  <p class="muted">Canon advises; people decide. Here is exactly what the AI does, what it sees, and what keeps it honest.</p>
+
+  <div class="grid g2" style="margin-top:1.25rem">
+    <div class="card"><h3>Checked without AI</h3><p class="muted">Banned words, preferred terms, required disclaimers, punctuation rules, and numbers that don't match the fact ledger. These are exact, repeatable checks with no AI involved.</p></div>
+    <div class="card"><h3>Checked with AI</h3><p class="muted">Tone, unsupported or exaggerated claims, what the writer meant, and the wording of a suggested fix. Every AI finding is labelled and shows a confidence score.</p></div>
+  </div>
+
+  <div class="card" style="margin-top:1rem">
+    <h2>What keeps the AI honest</h2>
+    <ul>
+      <li>Every finding must quote the draft exactly and cite a real rule or fact ID. Anything else is dropped before you see it, and the number dropped is shown.</li>
+      <li>If the rule engine already found an issue, its exact finding wins over the AI's.</li>
+      <li>Low-confidence and high-severity findings are marked for human review.</li>
+      <li>Nothing is applied, approved or published without a person clicking.</li>
+      <li>If the AI is down or returns bad output twice, Canon still shows rule-engine results and says the AI review was unavailable.</li>
+      <li>The <a href="{{ url_for('reliability') }}">reliability scorecard</a> measures misses and false flags on a fixed test set.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>What is sent to the AI service</h2>
+    <p>When AI review is on, Canon sends the draft text, the brand voice, the active rules and the facts the author is allowed to see to the Claude API (Anthropic). Before sending, {{ terms_count }} confidential term{{ 's are' if terms_count != 1 else ' is' }} replaced with placeholders. Names and emails of users are never sent.</p>
+    <p class="muted">Masking only covers terms on the confidential list; it can't recognise confidential information that isn't listed. Agency partners' drafts are checked only against facts shared with partners, so internal facts never leave the company through an agency draft.</p>
+    <p class="muted" style="margin:0">Status in this deployment: <b>{{ 'AI review on (' ~ ai_model ~ ')' if ai_on else 'AI review off (no API key configured), rule-based checks only' }}</b>.</p>
+  </div>
+
+  <div class="card">
+    <h2>Accountability</h2>
+    <p class="muted" style="margin:0">Every check, fix, override (with its reason), approval and fact change is recorded with who did it and when. Admins can see the full audit log; everyone can see the history of the content they work on.</p>
+  </div>
+</div>
+{% endblock %}

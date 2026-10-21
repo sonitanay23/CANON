@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}New draft{% endblock %}
+{% block body %}
+<div style="max-width:760px">
+  <div class="eyebrow">New draft</div>
+  <h1>What are you publishing?</h1>
+  <p class="muted">Paste your text or upload a PDF. Canon checks it as soon as you save, and nothing is changed without your approval.</p>
+  <form class="card" method="post" enctype="multipart/form-data" style="margin-top:1rem">
+    <div class="grid g2">
+      <div class="field"><label for="title">Title</label><input type="text" id="title" name="title" placeholder="e.g. Festive offer post" required></div>
+      <div class="field"><label for="channel">Channel</label>
+        <select id="channel" name="channel">{% for ch in channels %}<option>{{ ch }}</option>{% endfor %}</select></div>
+    </div>
+    <div class="field" style="margin-top:.9rem"><label for="body">Text</label>
+      <textarea id="body" name="body" rows="9" placeholder="Paste the post, email, ad copy or article here."></textarea></div>
+    <div class="field"><label for="pdf">Or upload a PDF</label><input type="file" id="pdf" name="pdf" accept="application/pdf">
+      <div class="hint">Text is extracted from the PDF. Scanned images aren't supported yet.</div></div>
+    {% if me.role == 'agency' %}<p class="hint" style="margin-top:1rem">You're signed in as an agency partner. Canon checks your draft against the facts the brand has shared with partners; internal facts are never shown to you or sent to the AI for your drafts.</p>{% endif %}
+    <div class="row" style="margin-top:1.1rem"><button class="btn primary">Save and check</button><a class="btn ghost" href="{{ url_for('content_list') }}">Cancel</a></div>
+  </form>
+</div>
+{% endblock %}

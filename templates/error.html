@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}{{ code }}{% endblock %}
+{% block body %}
+<div class="card empty" style="max-width:520px;margin:3rem auto">
+  <div class="big">{{ code }}</div><p>{{ msg }}</p>
+  <div class="row" style="justify-content:center"><a class="btn" href="{{ url_for('home') }}">Home</a>{% if code == 403 %}<a class="btn primary" href="{{ url_for('login') }}">Switch account</a>{% endif %}</div>
+</div>
+{% endblock %}

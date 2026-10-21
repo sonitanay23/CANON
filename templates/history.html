@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}History · {{ c.title }}{% endblock %}
+{% block body %}
+<div class="page-head">
+  <div><div class="eyebrow">History</div><h1>{{ c.title }}</h1>
+    <p>Every version, every decision, and who made it.</p></div>
+  <a class="btn" href="{{ url_for('content_view', cid=c.id) }}">← Back to draft</a>
+</div>
+<div class="grid review">
+  <section class="card">
+    <h2>Versions</h2>
+    <div class="timeline" style="margin-top:1rem">
+      {% for v in versions %}
+      <div>
+        <b>Version {{ v.n }}</b> <small>· {{ v.name or 'Canon' }} · {{ v.created_at[:16] }}</small>
+        <div><small class="muted">{{ v.note }}</small></div>
+        <div class="doc" style="font-size:.95rem;margin-top:.4rem">{% if diffs[v.n] %}{{ diffs[v.n] }}{% else %}{{ v.body }}{% endif %}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  <section class="stack">
+    <div class="card">
+      <h2>Decisions on issues</h2>
+      {% for d in decisions %}
+      <div class="item" style="align-items:flex-start"><div>
+        <span class="chip">{{ d.rule_ref }}</span> <span class="badge {{ 'medium' if d.action == 'rejected' else 'ok' }}">{{ {'accepted':'fix accepted','edited':'edited fix','rejected':'kept original'}[d.action] }}</span>
+        <div><small>{{ d.name }} · {{ d.created_at[:16] }}</small></div>
+        {% if d.reason %}<div style="margin-top:.2rem">“{{ d.reason }}”</div>{% endif %}
+      </div></div>
+      {% else %}<small>No decisions yet.</small>{% endfor %}
+    </div>
+    <div class="card">
+      <h2>Activity</h2>
+      {% for a in log %}<div class="item"><div><b>{{ a.action }}</b><div><small>{{ a.name or a.user_id }} · {{ a.created_at[:16] }}</small></div></div></div>
+      {% else %}<small>No activity yet.</small>{% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

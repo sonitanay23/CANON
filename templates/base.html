@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Canon{% endblock %} · Canon</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230e5a54'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Georgia' font-weight='700' font-size='18' fill='white'%3EC%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <a class="logo" href="{{ url_for('home') }}"><span class="logo-mark">C</span>Canon</a>
+    {% if me %}
+    <nav class="nav">
+      {% set ep = request.endpoint or '' %}
+      <a href="{{ url_for('content_list') }}" class="{{ 'on' if ep.startswith('content') or ep in ('impact',) }}">Content</a>
+      <a href="{{ url_for('brand') }}" class="{{ 'on' if ep == 'brand' }}">Brand rules &amp; facts</a>
+      {% if me.role in ('admin', 'reviewer') %}<a href="{{ url_for('insights') }}" class="{{ 'on' if ep == 'insights' }}">Rule insights</a>{% endif %}
+      <a href="{{ url_for('reliability') }}" class="{{ 'on' if ep == 'reliability' }}">Reliability</a>
+      {% if me.role == 'admin' %}<a href="{{ url_for('audit_view') }}" class="{{ 'on' if ep == 'audit_view' }}">Audit log</a>{% endif %}
+    </nav>
+    <div class="who">
+      {% if me.role in ('creator', 'agency', 'admin') %}<a class="btn primary small" href="{{ url_for('content_new') }}">+ New draft</a>{% endif %}
+      <span class="avatar">{{ me.name.split()[0][0] }}{{ me.name.split()[-1][0] }}</span>
+      <span class="who-name"><b>{{ me.name }}</b><small>{{ role_labels[me.role] }}</small></span>
+      <a class="btn ghost small" href="{{ url_for('login') }}" title="Switch demo account">Switch</a>
+    </div>
+    {% else %}
+    <nav class="nav"><a href="{{ url_for('trust') }}">How Canon uses AI</a></nav>
+    <a class="btn primary small" href="{{ url_for('login') }}">Try the demo</a>
+    {% endif %}
+  </div>
+</header>
+<main>
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% for cat, m in msgs %}<div class="flash {{ cat }}" role="status">{{ m }}</div>{% endfor %}
+  {% endwith %}
+  {% block body %}{% endblock %}
+</main>
+<footer>
+  <div class="in">
+    <span>Canon by Team LazyCoderz · demo brand <b>{{ brand }}</b> is fictional</span>
+    <span><span class="dot {{ 'on' if ai_on }}"></span> AI review {{ 'on (' ~ ai_model ~ ')' if ai_on else 'off: rule-based checks only' }} · <a href="{{ url_for('trust') }}">How Canon uses AI</a></span>
+  </div>
+</footer>
+</body>
+</html>

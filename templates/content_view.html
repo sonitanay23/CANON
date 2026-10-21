@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}{{ c.title }}{% endblock %}
+{% block body %}
+{% set is_author = me.id == c.author_id %}
+{% set can_act = c.status != 'approved' and (is_author or me.role in ('admin','reviewer')) %}
+{% set nums = {} %}{% for f in findings %}{% set _ = nums.update({f.id: loop.index}) %}{% endfor %}
+{% set high = findings|selectattr('severity','equalto','high')|list|length %}
+
+<div class="page-head">
+  <div>
+    <div class="eyebrow">{{ c.channel }} · by {{ c.author_name }}{% if c.author_role == 'agency' %} ({{ c.author_team }}){% endif %}</div>
+    <h1>{{ c.title }}</h1>
+    <div class="row"><span class="badge {{ c.status }}">{{ status_labels[c.status] }}</span><small>Version {{ v.n }} · saved {{ v.created_at[:16] }}</small>
+      <a href="{{ url_for('content_history', cid=c.id) }}"><small>History &amp; decisions →</small></a></div>
+  </div>
+  <div class="row">
+    {% if can_act %}
+      <form method="post" action="{{ url_for('content_check', cid=c.id) }}"><button class="btn {{ 'primary' if stale or not run }}">{{ 'Check' if not run else 'Check again' }}</button></form>
+    {% endif %}
+    {% if is_author and c.status in ('draft','changes_requested') %}
+      <form method="post" action="{{ url_for('content_status', cid=c.id) }}"><input type="hidden" name="action" value="submit">
+        <button class="btn {{ 'primary' if run and not stale and not findings }}">Submit for review</button></form>
+    {% endif %}
+    {% if me.role in ('admin','reviewer') and c.status == 'in_review' %}
+      <form method="post" action="{{ url_for('content_status', cid=c.id) }}"><input type="hidden" name="action" value="approve">
+        {% if high %}<input type="hidden" name="confirm" value="">{% endif %}
+        <button class="btn primary">Approve</button></form>
+    {% endif %}
+  </div>
+</div>
+
+{% if me.role in ('admin','reviewer') and c.status == 'in_review' %}
+<div class="card" style="margin-bottom:1rem">
+  <div class="row spread">
+    <div><b>Reviewer decision</b><br><small>{% if high %}{{ high }} high-severity issue{{ 's' if high != 1 }} still open. Canon will ask you to confirm before approving.{% elif findings %}{{ findings|length }} open issue{{ 's' if findings|length != 1 }}, none high-severity.{% else %}All issues are resolved. Ready to approve.{% endif %}</small></div>
+    <details><summary>Send back with a note</summary>
+      <form method="post" action="{{ url_for('content_status', cid=c.id) }}" style="margin-top:.5rem;min-width:280px">
+        <input type="hidden" name="action" value="request_changes">
+        <textarea name="note" rows="3" placeholder="What should the writer change?"></textarea>
+        <button class="btn small" style="margin-top:.4rem">Request changes</button>
+      </form></details>
+  </div>
+  {% if high %}
+  <form method="post" action="{{ url_for('content_status', cid=c.id) }}" style="margin-top:.6rem">
+    <input type="hidden" name="action" value="approve"><input type="hidden" name="confirm" value="1">
+    <button class="btn small danger">Approve anyway (decision is logged)</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="grid review">
+  <section class="stack sticky">
+    <div class="card">
+      <div class="card-head">
+        <h2>Draft</h2>
+        {% if findings %}<small>Click a highlight to jump to its issue</small>{% endif %}
+      </div>
+      <div class="doc">{% for text, f in segs %}{% if f %}<a class="mk" href="#f{{ f.id }}"><mark class="{{ f.severity }}" title="{{ f.issue }}">{{ text }}</mark><sup>{{ nums[f.id] }}</sup></a>{% else %}{{ text }}{% endif %}{% endfor %}</div>
+      {% if can_act and (is_author or me.role == 'admin') %}
+      <details style="margin-top:1rem"><summary>Edit the text yourself</summary>
+        <form method="post" action="{{ url_for('content_edit', cid=c.id) }}" style="margin-top:.6rem">
+          <textarea name="body" rows="8">{{ v.body }}</textarea>
+          <div class="row" style="margin-top:.5rem"><button class="btn small primary">Save as new version and re-check</button></div>
+        </form>
+      </details>
+      {% endif %}
+      {% if c.status == 'approved' %}<p class="hint" style="margin-top:1rem">Approved content is locked. Canon watches the facts it uses and flags it if any of them change.</p>{% endif %}
+    </div>
+
+    <div class="card" id="comments">
+      <h2>Conversation</h2>
+      {% for cm in comments %}
+        <div class="item" style="align-items:flex-start"><div><b>{{ cm.name }}</b> <small>· {{ role_labels[cm.role] }} · {{ cm.created_at[:16] }}</small><div>{{ cm.body }}</div></div></div>
+      {% else %}<small>No comments yet.</small>{% endfor %}
+      <form method="post" action="{{ url_for('content_comment', cid=c.id) }}" class="row" style="margin-top:.75rem">
+        <input type="text" name="body" placeholder="Add a comment for the team" style="flex:1">
+        <button class="btn small">Post</button>
+      </form>
+    </div>
+  </section>
+
+  <section id="issues">
+    <div class="card" style="margin-bottom:1rem">
+      <div class="row spread">
+        <div>
+          <div class="big-num">{{ findings|length }}</div>
+          <small>open issue{{ 's' if findings|length != 1 }}{% if handled %} · {{ handled|length }} handled{% endif %}</small>
+        </div>
+        <div class="row">
+          {% for s in ['high','medium','low'] %}{% set n = findings|selectattr('severity','equalto',s)|list|length %}{% if n %}<span class="badge {{ s }}">{{ n }} {{ s }}</span>{% endif %}{% endfor %}
+        </div>
+      </div>
+      {% if run %}
+      <p class="hint" style="margin:.7rem 0 0">
+        Last check: version {{ run.version_n }}, {{ run.created_at[:16] }} UTC.
+        {% if run.ai_status == 'ok' %}Rule engine + AI review{% if run.ai_dropped %}; {{ run.ai_dropped }} AI suggestion{{ 's' if run.ai_dropped != 1 }} dropped for not citing a valid rule or fact{% endif %}.
+        {% else %}Rule engine only. AI review {{ run.ai_status.replace('unavailable: ', 'unavailable (') }}{{ ')' if 'unavailable' in run.ai_status }}.{% endif %}
+      </p>
+      {% if stale %}<p class="flash info" style="margin:.7rem 0 0">The text changed since the last check. Run <b>Check again</b> to be sure.</p>{% endif %}
+      {% else %}
+      <p class="hint" style="margin:.7rem 0 0">Not checked yet. Click <b>Check</b> to review this draft against your brand rules and facts.</p>
+      {% endif %}
+    </div>
+
+    {% for f in findings %}
+    {% set src = sources[f.ref] %}
+    <article class="issue {{ f.severity }}" id="f{{ f.id }}">
+      <div class="issue-top">
+        <div class="row">
+          <span class="badge {{ f.severity }}">{{ nums[f.id] }} · {{ f.severity }}</span>
+          <span class="badge {{ f.method }}">{{ 'AI review' if f.method == 'ai' else 'Rule engine' }}</span>
+          {% if f.method == 'ai' %}<small>confidence {{ (f.confidence * 100)|round|int }}%</small>{% endif %}
+          {% if f.needs_review %}<span class="review-flag">· needs human review</span>{% endif %}
+        </div>
+        <div class="issue-title">{{ f.issue }}</div>
+      </div>
+      <div class="source"><b>Why:</b> <span class="chip">{{ f.ref }}</span> {{ src[0].split(' · ',1)[1] if ' · ' in src[0] else src[0] }}<br><small>{{ src[1] }}</small></div>
+      <div class="intent"><b>What the writer meant:</b> {{ f.intent or '—' }}</div>
+      <div class="fix"><span class="fix-label">Suggested fix</span>
+        {% if f.action == 'append' %}<ins>{{ f.fix }}</ins> <small class="muted">(added at the end)</small>
+        {% elif not f.fix %}<del>{{ f.quote }}</del> <small class="muted">(remove)</small>
+        {% else %}{{ word_diff(f.quote, f.fix) }}{% endif %}
+      </div>
+      {% if can_act %}
+      <div class="issue-actions">
+        <form method="post" action="{{ url_for('finding_decide', fid=f.id) }}" class="row">
+          <input type="hidden" name="action" value="accept"><button class="btn small primary">Accept fix</button>
+        </form>
+        <details><summary>Edit the fix</summary>
+          <form method="post" action="{{ url_for('finding_decide', fid=f.id) }}">
+            <input type="hidden" name="action" value="edit">
+            <textarea name="fix" rows="2">{{ f.fix }}</textarea>
+            <button class="btn small" style="margin-top:.4rem">Apply my version</button>
+          </form></details>
+        <details><summary>Keep the original</summary>
+          <form method="post" action="{{ url_for('finding_decide', fid=f.id) }}">
+            <input type="hidden" name="action" value="reject">
+            <textarea name="reason" rows="2" required placeholder="Why is the original right here? (helps improve unclear rules)"></textarea>
+            <button class="btn small" style="margin-top:.4rem">Keep original</button>
+          </form></details>
+        {% if f.action != 'append' %}
+        <details><summary>That's not what I meant</summary>
+          <form method="post" action="{{ url_for('finding_regenerate', fid=f.id) }}">
+            <input type="text" name="intent" value="{{ f.intent }}">
+            <button class="btn small" style="margin-top:.4rem" {{ 'disabled' if not ai_on }}>Rewrite the fix from this intent</button>
+            {% if not ai_on %}<div class="hint">Needs the AI, which is off in this deployment. You can edit the fix by hand.</div>{% endif %}
+          </form></details>
+        {% endif %}
+      </div>
+      {% endif %}
+    </article>
+    {% else %}
+      {% if run %}<div class="card empty"><div class="big">✓</div><b>No open issues.</b><br><small>{% if c.status in ('draft','changes_requested') and is_author %}Submit it for review when you're ready.{% else %}Nothing to fix on this version.{% endif %}</small></div>{% endif %}
+    {% endfor %}
+
+    {% if handled %}
+    <details class="card" style="margin-top:1rem"><summary>{{ handled|length }} handled issue{{ 's' if handled|length != 1 }}</summary>
+      {% for f in handled %}
+      <div class="item"><div><span class="chip">{{ f.ref }}</span> <small>{{ f.issue }}</small></div>
+        <span class="badge {{ 'ok' if f.status in ('accepted','edited','resolved') else 'medium' }}">{{ {'accepted':'fix accepted','edited':'edited fix','rejected':'kept original','resolved':'resolved by edit'}[f.status] }}</span></div>
+      {% endfor %}
+    </details>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
