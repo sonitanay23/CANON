@@ -70,13 +70,17 @@ class GeminiTests(unittest.TestCase):
         listing = {"models": [
             {"name": "models/gemini-3-flash-preview", "supportedGenerationMethods": ["generateContent"]},
             {"name": "models/gemini-9-flash", "supportedGenerationMethods": ["generateContent"]},
+            {"name": "models/gemini-omni-1.1-flash", "supportedGenerationMethods": ["generateContent"]},
             {"name": "models/gemini-9-flash-image", "supportedGenerationMethods": ["generateContent"]},
             {"name": "models/text-embedding", "supportedGenerationMethods": ["embedContent"]}]}
         calls = [http_error(404), resp(listing), resp(GOOD)]
         with mock.patch("urllib.request.urlopen", side_effect=calls) as m:
             kept, _ = ai.review("It will double your savings fast.", "calm", RULES, [], [], [])
-        self.assertEqual(ai.model(), "gemini-9-flash")
-        self.assertIn("gemini-9-flash:generateContent", m.call_args[0][0].full_url)
+        self.assertEqual(ai.model(), "gemini-3-flash-preview")  # preferred list wins
+        self.assertIn("gemini-3-flash-preview:generateContent", m.call_args[0][0].full_url)
+        # without preferred models, the highest stable text Flash model is chosen, never "omni"/"image"
+        with mock.patch("urllib.request.urlopen", return_value=resp(listing)):
+            self.assertEqual(ai._gemini_pick_model(exclude={"gemini-3-flash-preview"}), "gemini-9-flash")
         self.assertEqual(len(kept), 1)
 
     def test_overloaded_model_switches_to_another(self):
@@ -89,6 +93,10 @@ class GeminiTests(unittest.TestCase):
         self.assertEqual(ai.model(), "gemini-3-flash-preview")
         self.assertIn("gemini-3-flash-preview:generateContent", m.call_args[0][0].full_url)
         self.assertEqual(len(kept), 1)
+
+    def test_fallback_expires(self):
+        ai._resolved_model["gemini"] = ("gemini-3-flash-preview", 0)  # already expired
+        self.assertEqual(ai.model(), "gemini-3.1-flash-lite")
 
     def test_bad_key_gives_clear_message(self):
         with mock.patch("urllib.request.urlopen", side_effect=http_error(401, {"error": {"status": "UNAUTHENTICATED"}})):

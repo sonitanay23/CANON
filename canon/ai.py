@@ -38,12 +38,23 @@ def _key():
     return os.environ.get("GEMINI_API_KEY" if p == "gemini" else "ANTHROPIC_API_KEY", "").strip()
 
 
-_resolved_model = {}
+GEMINI_PREFERRED = ("gemini-3.1-flash-lite", "gemini-3-flash-preview", "gemini-3.1-flash", "gemini-3-flash")
+FALLBACK_MINUTES = 10
+_resolved_model = {}  # provider -> (fallback model, time to go back to the configured model)
+
+
+def configured_model():
+    p = provider()
+    return os.environ.get("CANON_MODEL") or DEFAULTS.get(p, "")
 
 
 def model():
     p = provider()
-    return _resolved_model.get(p) or os.environ.get("CANON_MODEL") or DEFAULTS.get(p, "")
+    fb = _resolved_model.get(p)
+    if fb and time.time() < fb[1]:
+        return fb[0]
+    _resolved_model.pop(p, None)
+    return configured_model()
 
 
 def label():
@@ -120,13 +131,19 @@ def _gemini_pick_model(exclude=()):
                                        headers={"x-goog-api-key": _key()}, method="GET"))
     names = [m["name"].split("/", 1)[-1] for m in data.get("models", [])
              if "generateContent" in m.get("supportedGenerationMethods", [])]
-    flash = [n for n in names if "flash" in n and n not in exclude
-             and not any(x in n for x in ("image", "tts", "live", "audio"))]
-    stable = [n for n in flash if "preview" not in n and "exp" not in n]
-    pool = stable or flash
-    if not pool:
-        raise AIUnavailable("no Gemini Flash model available for this key")
-    return sorted(pool, reverse=True)[0]
+    for name in GEMINI_PREFERRED:
+        if name in names and name not in exclude:
+            return name
+    flash = [n for n in names if n.startswith("gemini-") and "flash" in n and n not in exclude
+             and not any(x in n for x in ("image", "tts", "live", "audio", "omni", "computer"))]
+    if not flash:
+        raise AIUnavailable("no other Gemini Flash model available for this key")
+
+    def version(n):
+        nums = re.findall(r"\d+(?:\.\d+)?", n)
+        return float(nums[0]) if nums else 0.0
+    # prefer stable over preview, then the highest version number
+    return sorted(flash, key=lambda n: ("preview" not in n and "exp" not in n, version(n)), reverse=True)[0]
 
 
 def _gemini_call(system, user, max_tokens):
@@ -146,7 +163,7 @@ def _gemini_call(system, user, max_tokens):
         if "model not found" not in str(e) and "busy" not in str(e):
             raise
         # the model is gone or overloaded: switch to another available Flash model and try once more
-        _resolved_model["gemini"] = _gemini_pick_model(exclude={model()})
+        _resolved_model["gemini"] = (_gemini_pick_model(exclude={model()}), time.time() + FALLBACK_MINUTES * 60)
         data = _with_retries(go)
     cands = data.get("candidates") or []
     if not cands:
