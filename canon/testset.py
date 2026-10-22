@@ -7,8 +7,11 @@ false flags. The answer key is fixed before any check is run.
 """
 import json
 import threading
+import time
 
 from .db import connect, ex, now, q
+
+PACE_SECONDS = 5
 
 TESTSET = [
     # planted: facts stated wrongly
@@ -96,8 +99,12 @@ def run(run_id, use_ai, db_path=None):
     try:
         rules_by_id = {r["id"]: r for r in q(base, "SELECT * FROM rules")}
         results, dropped_total = [], 0
+        from . import ai
         for i, (tid, channel, text, expect, also_ok) in enumerate(TESTSET):
-            findings, ai_status, dropped = analyse(base, text, "creator", use_ai=use_ai)
+            if use_ai and i:
+                time.sleep(PACE_SECONDS)  # stay under free-tier requests-per-minute limits
+            with ai.patient():
+                findings, ai_status, dropped = analyse(base, text, "creator", use_ai=use_ai)
             dropped_total += dropped
             results.append({"id": tid, "channel": channel, "text": text, "expect": expect, "also_ok": also_ok,
                             "found": [f["ref"] for f in findings], "methods": [f["method"] for f in findings],

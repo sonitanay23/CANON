@@ -1,6 +1,10 @@
 """Core workflows: running checks, applying fixes, approval, fact changes and
 the guideline debugger. Routes call these; they hold no HTTP logic."""
+import copy
+import hashlib
+import json
 import re
+from collections import OrderedDict
 
 from . import ai, rules as engine
 from .db import add_version, audit, ex, latest_version, now, q, setting, visible_facts
@@ -28,6 +32,17 @@ def merge(rule_findings, ai_findings):
     return merged
 
 
+_ai_cache = OrderedDict()  # recent AI answers, so re-checking identical text doesn't spend API calls
+AI_CACHE_SIZE = 200
+
+
+def _cache_key(text, voice, rules, facts, terms):
+    parts = [ai.model(), text, voice, json.dumps(terms)]
+    parts += [f"{r['id']}|{r['type']}|{r['text']}" for r in rules]
+    parts += [f"{f['id']}|{f['value']}|{f['expires_on']}" for f in facts]
+    return hashlib.sha256("\n".join(parts).encode()).hexdigest()
+
+
 def analyse(conn, text, role, use_ai=True):
     """Run rule engine + AI. Returns (findings, ai_status, dropped)."""
     rules = q(conn, "SELECT * FROM rules WHERE active=1 ORDER BY id")
@@ -35,12 +50,21 @@ def analyse(conn, text, role, use_ai=True):
     rule_findings = engine.run_rule_engine(text, rules, facts)
     ai_status, dropped, ai_findings = "off", 0, []
     if use_ai and ai.available():
-        try:
-            ai_findings, dropped = ai.review(text, setting(conn, "voice", ""), rules, facts,
-                                             rule_findings, setting(conn, "confidential_terms", []))
+        voice, terms = setting(conn, "voice", ""), setting(conn, "confidential_terms", [])
+        key = _cache_key(text, voice, rules, facts, terms)
+        if key in _ai_cache:
+            _ai_cache.move_to_end(key)
+            ai_findings, dropped = copy.deepcopy(_ai_cache[key])
             ai_status = "ok"
-        except ai.AIUnavailable as e:
-            ai_status = f"unavailable: {e}"
+        else:
+            try:
+                ai_findings, dropped = ai.review(text, voice, rules, facts, rule_findings, terms)
+                ai_status = "ok"
+                _ai_cache[key] = copy.deepcopy((ai_findings, dropped))
+                if len(_ai_cache) > AI_CACHE_SIZE:
+                    _ai_cache.popitem(last=False)
+            except ai.AIUnavailable as e:
+                ai_status = f"unavailable: {e}"
     elif use_ai:
         ai_status = "unavailable: no API key configured"
     return merge(rule_findings, ai_findings), ai_status, dropped

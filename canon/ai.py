@@ -10,6 +10,7 @@ Design rules:
 import json
 import os
 import re
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -18,7 +19,22 @@ TIMEOUT = int(os.environ.get("CANON_AI_TIMEOUT", "45"))
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 DEFAULTS = {"gemini": "gemini-3.1-flash-lite", "anthropic": "claude-haiku-5-5"}
-RETRY_WAITS = (2, 5)  # seconds to wait after a rate-limit or overload response
+RETRY_WAITS = (2, 5)  # interactive checks: short waits, then fall back to rule-engine results
+PATIENT_WAITS = (10, 25, 45)  # background jobs (reliability test): wait out per-minute rate limits
+_local = threading.local()
+
+
+class patient:
+    """Use longer retry waits inside this block (for background jobs only)."""
+    def __enter__(self):
+        _local.patient = True
+
+    def __exit__(self, *a):
+        _local.patient = False
+
+
+def _waits():
+    return PATIENT_WAITS if getattr(_local, "patient", False) else RETRY_WAITS
 
 
 def provider():
@@ -109,12 +125,13 @@ def _error_detail(e):
 
 def _with_retries(fn):
     """Retry on rate limits (429) and overload (500/503/529); fail fast otherwise."""
-    for attempt in range(len(RETRY_WAITS) + 1):
+    waits = _waits()
+    for attempt in range(len(waits) + 1):
         try:
             return fn()
         except urllib.error.HTTPError as e:
-            if e.code in (429, 500, 503, 529) and attempt < len(RETRY_WAITS):
-                time.sleep(RETRY_WAITS[attempt])
+            if e.code in (429, 500, 503, 529) and attempt < len(waits):
+                time.sleep(waits[attempt])
                 continue
             detail = _error_detail(e)
             hint = {401: "API key rejected", 403: "API key not allowed for this API", 404: "model not found",

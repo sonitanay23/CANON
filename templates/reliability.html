@@ -14,7 +14,7 @@
 {% if run and run.status == 'running' %}
   <div class="card"><b>Running… {{ run.progress }} of {{ run.total }}</b><div class="meter" style="margin-top:.6rem"><span style="width:{{ (run.progress / run.total * 100)|round|int }}%"></span></div><small>This page refreshes on its own.</small></div>
 {% elif not summary %}
-  <div class="card empty"><div class="big">◎</div><b>No run yet.</b><br><small>Click a run button above. The rule-engine run takes a second{{ '; the AI run takes a minute or two' if ai_on }}.</small>
+  <div class="card empty"><div class="big">◎</div><b>No run yet.</b><br><small>Click a run button above. The rule-engine run takes a second{{ '; the AI run takes about 2–3 minutes because it spaces out its requests to stay within the free-tier rate limit' if ai_on }}.</small>
   {% if run and run.status.startswith('failed') %}<p class="flash error" style="margin-top:1rem">The last run failed: {{ run.status }}</p>{% endif %}</div>
 {% else %}
   <p><small>Latest run: {{ run.finished_at[:16] }} UTC · {{ 'rule engine + AI review' if run.with_ai else 'rule engine only' }}</small></p>

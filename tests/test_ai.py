@@ -118,6 +118,12 @@ class GeminiTests(unittest.TestCase):
             kept, _ = ai.review("It will double your savings fast.", "calm", RULES, [], [], [])
         self.assertEqual(len(kept), 1)
 
+    def test_patient_mode_uses_longer_waits(self):
+        self.assertEqual(ai._waits(), ai.RETRY_WAITS)
+        with ai.patient():
+            self.assertEqual(ai._waits(), ai.PATIENT_WAITS)
+        self.assertEqual(ai._waits(), ai.RETRY_WAITS)
+
     def test_bad_key_gives_clear_message(self):
         with mock.patch("urllib.request.urlopen", side_effect=http_error(401, {"error": {"status": "UNAUTHENTICATED"}})):
             with self.assertRaises(ai.AIUnavailable) as ctx:
@@ -145,3 +151,21 @@ class GeminiTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CacheTests(unittest.TestCase):
+    def test_identical_text_reuses_ai_answer(self):
+        from canon import services
+        from canon.db import connect
+        from canon.seed import seed
+        conn = connect(":memory:")
+        seed(conn)
+        services._ai_cache.clear()
+        fake = ([{"quote": "x", "issue": "i", "ref": "R-10", "method": "ai", "action": "replace", "severity": "low",
+                  "confidence": 0.9, "intent": "", "fix": "y", "needs_review": 0}], 0)
+        with mock.patch.dict(os.environ, {"GEMINI_API_KEY": "AQ.test"}), \
+             mock.patch.object(ai, "review", return_value=fake) as rv:
+            services.analyse(conn, "Same text twice.", "creator")
+            services.analyse(conn, "Same text twice.", "creator")
+            services.analyse(conn, "Different text.", "creator")
+        self.assertEqual(rv.call_count, 2)

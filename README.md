@@ -59,10 +59,13 @@ An admin can reset the demo to its starting state from the home page.
 | Rule engine only | 13 of 15 (87%) | 13 of 13 | 0 of 2 | 0 (0 on clean pieces) |
 | First run with Gemini (22 Oct) | 13 of 15 (87%) | 13 of 13 | 0 of 2 | 0 (0 on clean pieces) |
 | Second run with Gemini (22 Oct) | 14 of 15 (93%) | 13 of 13 | 1 of 2 | 6 of 24 flags (1 on clean pieces) |
+| Third run with Gemini (22 Oct) | 15 of 15 (100%) | 13 of 13 | 2 of 2 | 1 of 21 flags (1 on a clean piece) |
 
 In the first Gemini run the primary model was overloaded and Canon switched to a fallback model, and the AI added no findings. After that run we (1) changed the fallback to prefer known Gemini text models, (2) made quote matching tolerant of curly quotes and spacing, which had caused valid AI findings to be dropped, (3) made the review prompt check every sentence against each tone and claim rule, and (4) added a line to the Reliability page showing how many pieces the AI actually answered. These changes were not tuned on the planted test pieces' wording.
 
-The second run caught more, but the AI also re-checked terminology rules that the rule engine already handles exactly, and got them wrong (for example flagging "Plus plan" under the Velora Pro naming rule). We then limited the AI to the tone and claim rules and to contradictions of approved facts, as the design intended, and added one retry on timeouts. The AI now cannot cite a rule-engine rule at all. Re-run the test set from the **Reliability** page to see current numbers.
+The second run caught more, but the AI also re-checked terminology rules that the rule engine already handles exactly, and got them wrong (for example flagging "Plus plan" under the Velora Pro naming rule). We then limited the AI to the tone and claim rules and to contradictions of approved facts, as the design intended, and added one retry on timeouts. The AI now cannot cite a rule-engine rule at all.
+
+In the third run the AI answered 18 of 25 pieces; the other 7 hit the free tier's rate limit (429). We then spaced the test's AI calls about 5 seconds apart, made the background test wait out rate limits instead of giving up, and added a cache so re-checking identical text with unchanged rules reuses the earlier AI answer. AI results vary from run to run, so these figures are measurements from 22 Oct, not guarantees. Re-run the test set from the **Reliability** page to see current numbers.
 
 ---
 
