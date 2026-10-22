@@ -58,8 +58,11 @@ An admin can reset the demo to its starting state from the home page.
 |---|---|---|---|---|
 | Rule engine only | 13 of 15 (87%) | 13 of 13 | 0 of 2 | 0 (0 on clean pieces) |
 | First run with Gemini (22 Oct) | 13 of 15 (87%) | 13 of 13 | 0 of 2 | 0 (0 on clean pieces) |
+| Second run with Gemini (22 Oct) | 14 of 15 (93%) | 13 of 13 | 1 of 2 | 6 of 24 flags (1 on clean pieces) |
 
-In the first Gemini run the primary model was overloaded and Canon switched to a fallback model, and the AI added no findings. After that run we (1) changed the fallback to prefer known Gemini text models, (2) made quote matching tolerant of curly quotes and spacing, which had caused valid AI findings to be dropped, (3) made the review prompt check every sentence against each tone and claim rule, and (4) added a line to the Reliability page showing how many pieces the AI actually answered. These changes were not tuned on the planted test pieces' wording. Re-run the test set from the **Reliability** page to see current numbers.
+In the first Gemini run the primary model was overloaded and Canon switched to a fallback model, and the AI added no findings. After that run we (1) changed the fallback to prefer known Gemini text models, (2) made quote matching tolerant of curly quotes and spacing, which had caused valid AI findings to be dropped, (3) made the review prompt check every sentence against each tone and claim rule, and (4) added a line to the Reliability page showing how many pieces the AI actually answered. These changes were not tuned on the planted test pieces' wording.
+
+The second run caught more, but the AI also re-checked terminology rules that the rule engine already handles exactly, and got them wrong (for example flagging "Plus plan" under the Velora Pro naming rule). We then limited the AI to the tone and claim rules and to contradictions of approved facts, as the design intended, and added one retry on timeouts. The AI now cannot cite a rule-engine rule at all. Re-run the test set from the **Reliability** page to see current numbers.
 
 ---
 

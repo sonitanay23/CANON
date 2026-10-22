@@ -122,6 +122,8 @@ def _with_retries(fn):
                     503: "AI service busy", 529: "AI service busy"}.get(e.code, "API error")
             raise AIUnavailable(f"{hint} ({e.code}{', ' + detail if detail else ''})") from e
         except (urllib.error.URLError, TimeoutError, OSError) as e:
+            if attempt == 0:
+                continue  # one quick retry for timeouts and dropped connections
             raise AIUnavailable(f"AI service unreachable: {e}") from e
 
 
@@ -240,8 +242,10 @@ Each finding:
 - "intent": one short line describing what the writer was trying to say.
 - "fix": the smallest replacement for "quote" that keeps that intent and follows the rule.
   Never add a number, claim or promise that is not in the approved facts.
-- Do not report banned words, spellings or disclaimers already listed in "Already found".
-- If the draft breaks no [tone] or [claim] rule, return {"findings": []}."""
+- Cite a fact ID (F-xx) only when the draft states a value that contradicts that approved fact.
+- Spelling, product-name formatting, banned words, punctuation and disclaimers are checked by
+  other software. Never report them.
+- If the draft breaks no [tone] or [claim] rule and contradicts no fact, return {"findings": []}."""
 
 
 def build_review_prompt(draft, voice, rules, facts, already):
@@ -319,12 +323,19 @@ def validate(raw_findings, original_text, mapping, valid_refs):
     return kept, dropped
 
 
+AI_RULE_TYPES = ("tone", "claim")
+
+
 def review(draft, voice, rules, facts, already, confidential_terms):
+    """The AI judges only tone and claim rules, plus consistency with approved facts.
+    Banned words, terminology, disclaimers and punctuation belong to the rule engine,
+    so the AI is not shown those rules and may not cite them."""
+    ai_rules = [r for r in rules if r["type"] in AI_RULE_TYPES]
     masked, mapping = redact(draft, confidential_terms)
-    prompt = build_review_prompt(masked, voice, rules, facts, already)
+    prompt = build_review_prompt(masked, voice, ai_rules, facts, already)
     data = call_json(REVIEW_SYSTEM, prompt)
     raw = data.get("findings", []) if isinstance(data, dict) else data
-    refs = {r["id"] for r in rules} | {f["id"] for f in facts}
+    refs = {r["id"] for r in ai_rules} | {f["id"] for f in facts}
     return validate(raw, draft, mapping, refs)
 
 

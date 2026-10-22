@@ -30,7 +30,8 @@ def http_error(code, body=None):
 GOOD = {"candidates": [{"content": {"parts": [{"text": json.dumps({"findings": [
     {"quote": "double your savings", "ref": "R-10", "fix": "help you save", "severity": "high",
      "confidence": 0.9, "intent": "Show the app helps people save", "issue": "Unsupported claim"}]})}]}}]}
-RULES = [{"id": "R-10", "type": "claim", "title": "Claims", "text": "Back claims with facts", "active": 1}]
+RULES = [{"id": "R-10", "type": "claim", "title": "Claims", "text": "Back claims with facts", "active": 1},
+         {"id": "R-05", "type": "terminology", "title": "Plan name", "text": "Write Velora Pro", "active": 1}]
 
 
 class GeminiTests(unittest.TestCase):
@@ -103,6 +104,19 @@ class GeminiTests(unittest.TestCase):
         found = ai.locate(text, "act now,  this offer won\u2019t last")
         self.assertEqual(found, "Act now, this offer won't last")
         self.assertIsNone(ai.locate(text, "this offer lasts forever"))
+
+    def test_ai_cannot_cite_rule_engine_rules(self):
+        bad = {"candidates": [{"content": {"parts": [{"text": json.dumps({"findings": [
+            {"quote": "Plus plan", "ref": "R-05", "fix": "Velora Pro plan", "severity": "low", "confidence": 0.9}]})}]}}]}
+        with mock.patch("urllib.request.urlopen", return_value=resp(bad)) as m:
+            kept, dropped = ai.review("Upgrade to the Plus plan today.", "calm", RULES, [], [], [])
+        self.assertEqual((len(kept), dropped), (0, 1))
+        self.assertNotIn("Write Velora Pro", m.call_args[0][0].data.decode())  # rule not even shown to the AI
+
+    def test_timeout_retried_once(self):
+        with mock.patch("urllib.request.urlopen", side_effect=[TimeoutError("read timed out"), resp(GOOD)]):
+            kept, _ = ai.review("It will double your savings fast.", "calm", RULES, [], [], [])
+        self.assertEqual(len(kept), 1)
 
     def test_bad_key_gives_clear_message(self):
         with mock.patch("urllib.request.urlopen", side_effect=http_error(401, {"error": {"status": "UNAUTHENTICATED"}})):
