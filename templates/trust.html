@@ -25,8 +25,11 @@
 
   <div class="card">
     <h2>What is sent to the AI service</h2>
-    <p>When AI review is on, Canon sends the draft text, the brand voice, the active rules and the facts the author is allowed to see to the Claude API (Anthropic). Before sending, {{ terms_count }} confidential term{{ 's are' if terms_count != 1 else ' is' }} replaced with placeholders. Names and emails of users are never sent.</p>
+    <p>When AI review is on, Canon sends the draft text, the brand voice, the active rules and the facts the author is allowed to see to the AI service{% if ai_provider == 'gemini' %} (Google Gemini API){% elif ai_provider == 'anthropic' %} (Claude API, Anthropic){% endif %}. Before sending, {{ terms_count }} confidential term{{ 's are' if terms_count != 1 else ' is' }} replaced with placeholders. Names and emails of users are never sent.</p>
     <p class="muted">Masking only covers terms on the confidential list; it can't recognise confidential information that isn't listed. Agency partners' drafts are checked only against facts shared with partners, so internal facts never leave the company through an agency draft.</p>
+    {% if ai_provider == 'gemini' %}
+    <p class="flash info" style="margin:.5rem 0"><b>This demo uses Google's free Gemini API tier.</b> Under Google's terms for unpaid services, submitted content may be used to improve Google's products and may be read by human reviewers, and Google asks users not to submit sensitive or confidential information. That's acceptable here because all demo data is fictional. A real deployment would use a paid tier, where these terms differ.</p>
+    {% endif %}
     <p class="muted" style="margin:0">Status in this deployment: <b>{{ 'AI review on (' ~ ai_model ~ ')' if ai_on else 'AI review off (no API key configured), rule-based checks only' }}</b>.</p>
   </div>
 

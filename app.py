@@ -72,7 +72,7 @@ def can_see(content):
 
 @app.context_processor
 def inject():
-    return {"me": g.get("user"), "ai_on": ai.available(), "ai_model": ai.MODEL,
+    return {"me": g.get("user"), "ai_on": ai.available(), "ai_model": ai.label(), "ai_provider": ai.provider(),
             "status_labels": STATUS_LABELS, "role_labels": ROLE_LABELS,
             "brand": setting(get_db(), "brand", "Velora Money")}
 

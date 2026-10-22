@@ -44,5 +44,15 @@
     <span><span class="dot {{ 'on' if ai_on }}"></span> AI review {{ 'on (' ~ ai_model ~ ')' if ai_on else 'off: rule-based checks only' }} · <a href="{{ url_for('trust') }}">How Canon uses AI</a></span>
   </div>
 </footer>
+<script>
+  // show progress on slow actions (AI checks take a few seconds)
+  document.querySelectorAll('form').forEach(function (f) {
+    f.addEventListener('submit', function () {
+      var b = f.querySelector('button:not([name]), button[name="action"]');
+      var slow = /check|regenerate|propose|content\/new/.test(f.action);
+      if (b && slow) { setTimeout(function () { b.disabled = true; b.textContent = 'Checking…'; }, 0); }
+    });
+  });
+</script>
 </body>
 </html>

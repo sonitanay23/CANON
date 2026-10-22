@@ -10,7 +10,5 @@ services:
         value: 3.12.4
       - key: SECRET_KEY
         generateValue: true
-      - key: ANTHROPIC_API_KEY
+      - key: GEMINI_API_KEY
         sync: false
-      - key: CANON_MODEL
-        value: claude-sonnet-5-5

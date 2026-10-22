@@ -1,4 +1,4 @@
-"""AI review using the Claude API.
+"""AI review using Google Gemini (default) or the Claude API.
 
 Design rules:
 - Confidential terms are masked before anything leaves the server.
@@ -10,16 +10,51 @@ Design rules:
 import json
 import os
 import re
+import time
 import urllib.error
 import urllib.request
 
-API_URL = "https://api.anthropic.com/v1/messages"
-MODEL = os.environ.get("CANON_MODEL", "claude-sonnet-5-5")
-TIMEOUT = int(os.environ.get("CANON_AI_TIMEOUT", "60"))
+TIMEOUT = int(os.environ.get("CANON_AI_TIMEOUT", "45"))
+GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
+ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
+DEFAULTS = {"gemini": "gemini-3.1-flash-lite", "anthropic": "claude-haiku-5-5"}
+RETRY_WAITS = (2, 5)  # seconds to wait after a rate-limit or overload response
+
+
+def provider():
+    """gemini or anthropic, chosen by which key is set (or CANON_AI_PROVIDER)."""
+    forced = os.environ.get("CANON_AI_PROVIDER", "").strip().lower()
+    if forced in DEFAULTS:
+        return forced
+    if os.environ.get("GEMINI_API_KEY"):
+        return "gemini"
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return "anthropic"
+    return None
+
+
+def _key():
+    p = provider()
+    return os.environ.get("GEMINI_API_KEY" if p == "gemini" else "ANTHROPIC_API_KEY", "").strip()
+
+
+_resolved_model = {}
+
+
+def model():
+    p = provider()
+    return _resolved_model.get(p) or os.environ.get("CANON_MODEL") or DEFAULTS.get(p, "")
+
+
+def label():
+    p = provider()
+    if not p:
+        return ""
+    return f"{'Google Gemini' if p == 'gemini' else 'Claude'} · {model()}"
 
 
 def available():
-    return bool(os.environ.get("ANTHROPIC_API_KEY"))
+    return bool(provider() and _key())
 
 
 class AIUnavailable(Exception):
@@ -44,29 +79,97 @@ def unredact(text, mapping):
     return text
 
 
-def _call(system, user, max_tokens=2500):
-    key = os.environ.get("ANTHROPIC_API_KEY")
-    if not key:
-        raise AIUnavailable("No ANTHROPIC_API_KEY configured")
-    payload = json.dumps({
-        "model": MODEL,
-        "max_tokens": max_tokens,
-        "system": system,
-        "messages": [{"role": "user", "content": user}],
-    }).encode()
-    req = urllib.request.Request(API_URL, data=payload, method="POST", headers={
-        "content-type": "application/json",
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
-    })
+def _http(url, body=None, headers=None, method="POST"):
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request(url, data=data, method=method,
+                                 headers={"content-type": "application/json", **(headers or {})})
+    with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+        return json.loads(resp.read())
+
+
+def _error_detail(e):
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
-            data = json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        raise AIUnavailable(f"Claude API error {e.code}") from e
-    except (urllib.error.URLError, TimeoutError, OSError) as e:
-        raise AIUnavailable(f"Claude API unreachable: {e}") from e
+        body = json.loads(e.read())
+        err = body.get("error", {})
+        return err.get("status") or err.get("type") or err.get("message", "")[:80]
+    except Exception:  # noqa: BLE001 - best effort only
+        return ""
+
+
+def _with_retries(fn):
+    """Retry on rate limits (429) and overload (500/503/529); fail fast otherwise."""
+    for attempt in range(len(RETRY_WAITS) + 1):
+        try:
+            return fn()
+        except urllib.error.HTTPError as e:
+            if e.code in (429, 500, 503, 529) and attempt < len(RETRY_WAITS):
+                time.sleep(RETRY_WAITS[attempt])
+                continue
+            detail = _error_detail(e)
+            hint = {401: "API key rejected", 403: "API key not allowed for this API", 404: "model not found",
+                    429: "rate limit reached, try again in a minute"}.get(e.code, "API error")
+            raise AIUnavailable(f"{hint} ({e.code}{', ' + detail if detail else ''})") from e
+        except (urllib.error.URLError, TimeoutError, OSError) as e:
+            raise AIUnavailable(f"AI service unreachable: {e}") from e
+
+
+def _gemini_pick_model():
+    """If the configured model is gone, pick an available Flash model that can generate text."""
+    data = _with_retries(lambda: _http(f"{GEMINI_BASE}/models?pageSize=200",
+                                       headers={"x-goog-api-key": _key()}, method="GET"))
+    names = [m["name"].split("/", 1)[-1] for m in data.get("models", [])
+             if "generateContent" in m.get("supportedGenerationMethods", [])]
+    flash = [n for n in names if "flash" in n and not any(x in n for x in ("image", "tts", "live", "audio"))]
+    stable = [n for n in flash if "preview" not in n and "exp" not in n]
+    pool = stable or flash
+    if not pool:
+        raise AIUnavailable("no Gemini Flash model available for this key")
+    return sorted(pool, reverse=True)[0]
+
+
+def _gemini_call(system, user, max_tokens):
+    body = {
+        "systemInstruction": {"parts": [{"text": system}]},
+        "contents": [{"role": "user", "parts": [{"text": user}]}],
+        "generationConfig": {"responseMimeType": "application/json", "temperature": 0.2,
+                             "maxOutputTokens": max(max_tokens, 4096)},
+    }
+
+    def go():
+        return _http(f"{GEMINI_BASE}/models/{model()}:generateContent", body, {"x-goog-api-key": _key()})
+
+    try:
+        data = _with_retries(go)
+    except AIUnavailable as e:
+        if "model not found" not in str(e):
+            raise
+        _resolved_model["gemini"] = _gemini_pick_model()
+        data = _with_retries(go)
+    cands = data.get("candidates") or []
+    if not cands:
+        reason = (data.get("promptFeedback") or {}).get("blockReason", "no response")
+        raise AIUnavailable(f"Gemini returned no answer ({reason})")
+    parts = (cands[0].get("content") or {}).get("parts") or []
+    text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
+    if not text.strip():
+        raise AIUnavailable(f"Gemini returned an empty answer ({cands[0].get('finishReason', 'unknown')})")
+    return text
+
+
+def _anthropic_call(system, user, max_tokens):
+    body = {"model": model(), "max_tokens": max_tokens, "system": system,
+            "messages": [{"role": "user", "content": user}]}
+    data = _with_retries(lambda: _http(ANTHROPIC_URL, body, {"x-api-key": _key(),
+                                                             "anthropic-version": "2023-06-01"}))
     return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+
+
+def _call(system, user, max_tokens=2500):
+    if not available():
+        raise AIUnavailable("no API key configured")
+    if provider() == "gemini":
+        return _gemini_call(system, user, max_tokens)
+    return _anthropic_call(system, user, max_tokens)
 
 
 def _parse_json(text):

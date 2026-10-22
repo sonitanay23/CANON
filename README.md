@@ -30,7 +30,7 @@ An admin can reset the demo to its starting state from the home page.
 | Brand setup | Brand voice, 13 rules, a 10-fact ledger with owner, source, expiry and visibility; admins can add rules, edit wording, switch rules on or off and change facts |
 | Input | Paste text, or upload a PDF (text is extracted) |
 | Checks: rule engine | Banned words, preferred terms, required disclaimers, punctuation rules, numbers that don't match the fact ledger, use of expired facts |
-| Checks: AI review | Tone, unsupported claims and fact consistency via the Claude API, with every finding validated (see below) |
+| Checks: AI review | Tone, unsupported claims and fact consistency via the Google Gemini API (Claude API also supported), with every finding validated (see below) |
 | Findings | The flagged text, reason, cited rule or fact ID, severity, which layer found it, confidence, and the writer's likely intent |
 | Fixes | Minimal word-level diff; accept, edit, or keep the original with a required reason; "that's not what I meant" rewrites the fix from an edited intent (AI) |
 | Workflow | Draft → in review → changes requested → approved; comments; approval warns when high-severity issues are still open |
@@ -63,14 +63,14 @@ On the 25-piece test set with AI off: **13 of 13** rule-detectable planted issue
 ```
 Browser ──> Flask app (app.py, server-rendered pages)
               ├─ canon/rules.py     rule engine: patterns, disclaimers, fact matching, claim links
-              ├─ canon/ai.py        Claude API call, redaction, JSON parsing, validation
+              ├─ canon/ai.py        Gemini / Claude API calls, retries, redaction, JSON parsing, validation
               ├─ canon/services.py  checks, fixes, approval, fact changes, guideline debugger
               ├─ canon/testset.py   labelled test set and scorer (runs in a background thread)
               ├─ canon/seed.py      fictional demo brand and content
               └─ canon/db.py        SQLite schema and helpers
 ```
 
-**Stack:** Python 3.12, Flask, Jinja templates, plain CSS (no front-end build), SQLite, pypdf, gunicorn. AI: Claude API (`claude-sonnet-5-5` by default), called over HTTPS with the standard library.
+**Stack:** Python 3.12, Flask, Jinja templates, plain CSS (no front-end build), SQLite, pypdf, gunicorn. AI: Google Gemini API (`gemini-3.1-flash-lite` by default, native `generateContent` endpoint), called over HTTPS with the standard library. The Claude API is supported as an alternative by setting `ANTHROPIC_API_KEY` instead. Rate-limit responses are retried twice with a short wait; if the configured model is unavailable, Canon picks an available Gemini Flash model.
 
 **Data:** SQLite file, created and seeded on first start. On hosts with an ephemeral disk (such as Render's free tier), the demo resets to its starting state whenever the service restarts.
 
@@ -80,11 +80,12 @@ Browser ──> Flask app (app.py, server-rendered pages)
 
 ```bash
 pip install -r requirements.txt
-export ANTHROPIC_API_KEY=sk-ant-...   # optional; without it Canon runs rule-based checks only
-python app.py                          # http://localhost:5000
+export GEMINI_API_KEY=your-key        # optional; without it Canon runs rule-based checks only
+python -m canon.check_key             # one real AI check, to confirm the key works
+python app.py                         # http://localhost:5000
 ```
 
-Tests (end-to-end, AI off):
+Tests (end-to-end flow with AI off, plus the AI layer with the network mocked):
 
 ```bash
 python -m unittest discover -s tests -v
@@ -94,12 +95,14 @@ python -m unittest discover -s tests -v
 
 1. Push this repository to GitHub.
 2. On Render: **New → Blueprint**, pick the repository. `render.yaml` sets everything up.
-3. Add `ANTHROPIC_API_KEY` in the service's environment settings.
+3. Add `GEMINI_API_KEY` in the service's environment settings. Never commit the key to the repository.
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Enables AI review | unset (rule engine only) |
-| `CANON_MODEL` | Claude model ID | `claude-sonnet-5-5` |
+| `GEMINI_API_KEY` | Enables AI review with Google Gemini | unset (rule engine only) |
+| `ANTHROPIC_API_KEY` | Alternative: AI review with Claude | unset |
+| `CANON_MODEL` | Model ID override | `gemini-3.1-flash-lite` (Gemini) or `claude-haiku-5-5` (Claude) |
+| `CANON_AI_TIMEOUT` | Seconds before an AI call gives up | `45` |
 | `SECRET_KEY` | Signs session cookies | dev value; set in production |
 | `CANON_DB` | SQLite file path | `canon.db` in the project folder |
 
@@ -109,6 +112,7 @@ python -m unittest discover -s tests -v
 
 | Round 1 plan | Round 2 build | Why |
 |---|---|---|
+| Hosted LLM (Claude planned) | Google Gemini API (free tier); Claude still supported | Free tier for the hackathon build; provider is one setting |
 | Next.js frontend + FastAPI backend | One Flask app with server-rendered pages | One service, no build step, quicker and more reliable to ship in 72 hours |
 | PostgreSQL + pgvector | SQLite | The demo needs no vector search; fact links are exact, which is more reliable for the affected-content search |
 | Image OCR, contrast and logo checks | Moved to Round 3 | Kept out of the critical path |
@@ -126,6 +130,6 @@ python -m unittest discover -s tests -v
 ## Disclosures
 
 - **AI assistance:** this codebase was written with substantial help from Claude (Anthropic), reviewed and tested by the team.
-- **External service:** the Claude API (Anthropic) for AI review, when an API key is configured.
+- **External service:** the Google Gemini API (free tier) for AI review, when an API key is configured. Under Google's terms for unpaid services, submitted content may be used to improve Google's products and may be read by human reviewers; that's acceptable for this demo because all data is fictional, and a real deployment would use a paid tier.
 - **Libraries:** Flask, Jinja2, pypdf, gunicorn (open source, used under their licences). No templates or boilerplate projects were used.
 - **Data:** all demo data is fictional. No real customer or personal data is used.

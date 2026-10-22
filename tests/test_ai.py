@@ -1,0 +1,108 @@
+"""AI layer tests with the network mocked (no real API calls)."""
+import io
+import json
+import os
+import sys
+import unittest
+import urllib.error
+from unittest import mock
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from canon import ai  # noqa: E402
+
+
+class FakeResp(io.BytesIO):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def resp(obj):
+    return FakeResp(json.dumps(obj).encode())
+
+
+def http_error(code, body=None):
+    return urllib.error.HTTPError("u", code, "err", {}, io.BytesIO(json.dumps(body or {}).encode()))
+
+
+GOOD = {"candidates": [{"content": {"parts": [{"text": json.dumps({"findings": [
+    {"quote": "double your savings", "ref": "R-10", "fix": "help you save", "severity": "high",
+     "confidence": 0.9, "intent": "Show the app helps people save", "issue": "Unsupported claim"}]})}]}}]}
+RULES = [{"id": "R-10", "type": "claim", "title": "Claims", "text": "Back claims with facts", "active": 1}]
+
+
+class GeminiTests(unittest.TestCase):
+    def setUp(self):
+        ai._resolved_model.clear()
+        self.env = mock.patch.dict(os.environ, {"GEMINI_API_KEY": "AQ.test", "CANON_MODEL": ""}, clear=False)
+        self.env.start()
+        os.environ.pop("ANTHROPIC_API_KEY", None)
+        os.environ.pop("CANON_MODEL", None)
+
+    def tearDown(self):
+        self.env.stop()
+
+    def test_provider_and_default_model(self):
+        self.assertEqual(ai.provider(), "gemini")
+        self.assertEqual(ai.model(), "gemini-3.1-flash-lite")
+        self.assertTrue(ai.available())
+
+    def test_review_sends_key_once_in_header(self):
+        with mock.patch("urllib.request.urlopen", return_value=resp(GOOD)) as m:
+            kept, dropped = ai.review("It will double your savings fast.", "calm", RULES, [], [], [])
+        req = m.call_args[0][0]
+        self.assertIn(":generateContent", req.full_url)
+        self.assertNotIn("key=", req.full_url)  # key sent once, in the header only
+        self.assertEqual(req.get_header("X-goog-api-key"), "AQ.test")
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(kept[0]["ref"], "R-10")
+
+    def test_retries_on_rate_limit(self):
+        calls = [http_error(429), resp(GOOD)]
+        with mock.patch("urllib.request.urlopen", side_effect=calls), mock.patch("time.sleep") as sl:
+            kept, _ = ai.review("It will double your savings fast.", "calm", RULES, [], [], [])
+        self.assertEqual(len(kept), 1)
+        sl.assert_called_once()
+
+    def test_model_not_found_falls_back_to_listed_flash(self):
+        listing = {"models": [
+            {"name": "models/gemini-3-flash-preview", "supportedGenerationMethods": ["generateContent"]},
+            {"name": "models/gemini-9-flash", "supportedGenerationMethods": ["generateContent"]},
+            {"name": "models/gemini-9-flash-image", "supportedGenerationMethods": ["generateContent"]},
+            {"name": "models/text-embedding", "supportedGenerationMethods": ["embedContent"]}]}
+        calls = [http_error(404), resp(listing), resp(GOOD)]
+        with mock.patch("urllib.request.urlopen", side_effect=calls) as m:
+            kept, _ = ai.review("It will double your savings fast.", "calm", RULES, [], [], [])
+        self.assertEqual(ai.model(), "gemini-9-flash")
+        self.assertIn("gemini-9-flash:generateContent", m.call_args[0][0].full_url)
+        self.assertEqual(len(kept), 1)
+
+    def test_bad_key_gives_clear_message(self):
+        with mock.patch("urllib.request.urlopen", side_effect=http_error(401, {"error": {"status": "UNAUTHENTICATED"}})):
+            with self.assertRaises(ai.AIUnavailable) as ctx:
+                ai.review("text", "calm", RULES, [], [], [])
+        self.assertIn("API key rejected", str(ctx.exception))
+
+    def test_blocked_or_empty_answer(self):
+        with mock.patch("urllib.request.urlopen", return_value=resp({"promptFeedback": {"blockReason": "SAFETY"}})):
+            with self.assertRaises(ai.AIUnavailable):
+                ai.review("text", "calm", RULES, [], [], [])
+
+    def test_invalid_json_retried_then_fails(self):
+        bad = {"candidates": [{"content": {"parts": [{"text": "not json"}]}}]}
+        with mock.patch("urllib.request.urlopen", side_effect=[resp(bad), resp(bad)]):
+            with self.assertRaises(ai.AIUnavailable):
+                ai.review("text", "calm", RULES, [], [], [])
+
+    def test_confidential_terms_never_sent(self):
+        with mock.patch("urllib.request.urlopen", return_value=resp({"candidates": [{"content": {"parts": [{"text": "{\"findings\": []}"}]}}]})) as m:
+            ai.review("Project Nova launches at ₹599.", "calm", RULES, [], [], ["Project Nova", "₹599"])
+        sent = m.call_args[0][0].data.decode()
+        self.assertNotIn("Project Nova", sent)
+        self.assertNotIn("599", sent)
+
+
+if __name__ == "__main__":
+    unittest.main()
