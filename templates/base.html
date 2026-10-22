@@ -4,13 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Canon{% endblock %} · Canon</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230e5a54'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Georgia' font-weight='700' font-size='18' fill='white'%3EC%3C/text%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231a2233'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Georgia' font-weight='700' font-size='18' fill='white'%3EC%3C/text%3E%3C/svg%3E">
 </head>
 <body>
 <header class="top">
   <div class="top-in">
-    <a class="logo" href="{{ url_for('home') }}"><span class="logo-mark">C</span>Canon</a>
+    <a class="logo" href="{{ url_for('home') }}" aria-label="Canon home"><span class="logo-mark">C</span>Canon</a>
     {% if me %}
     <nav class="nav">
       {% set ep = request.endpoint or '' %}
@@ -40,8 +43,8 @@
 </main>
 <footer>
   <div class="in">
-    <span>Canon by Team LazyCoderz · demo brand <b>{{ brand }}</b> is fictional</span>
-    <span><span class="dot {{ 'on' if ai_on }}"></span> AI review {{ 'on (' ~ ai_model ~ ')' if ai_on else 'off: rule-based checks only' }} · <a href="{{ url_for('trust') }}">How Canon uses AI</a></span>
+    <span>Canon, built by Team LazyCoderz. The demo brand {{ brand }} is fictional.</span>
+    <span><span class="dot {{ 'on' if ai_on }}"></span>&nbsp; AI review {{ 'on, ' ~ ai_model if ai_on else 'off, rule-based checks only' }}. <a href="{{ url_for('trust') }}">How Canon uses AI</a></span>
   </div>
 </footer>
 <script>

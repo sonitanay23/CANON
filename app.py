@@ -176,7 +176,8 @@ def logout():
 def content_list():
     db = get_db()
     sql = ("SELECT c.*, u.name AS author_name, u.team AS author_team, "
-           "(SELECT COUNT(*) FROM findings f WHERE f.content_id=c.id AND f.status='open') AS open_issues "
+           "(SELECT COUNT(*) FROM findings f WHERE f.content_id=c.id AND f.status='open') AS open_issues, "
+           "(SELECT COUNT(*) FROM check_runs r WHERE r.content_id=c.id) AS checks "
            "FROM content c JOIN users u ON u.id=c.author_id ")
     if g.user["role"] in ("admin", "reviewer"):
         rows = q(db, sql + "ORDER BY c.updated_at DESC")
@@ -227,8 +228,14 @@ def content_view(cid):
     db = get_db()
     c = content_or_404(cid)
     v = latest_version(db, cid)
-    findings = q(db, "SELECT * FROM findings WHERE content_id=? AND status='open' "
-                     "ORDER BY CASE severity WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, id", (cid,))
+    findings = q(db, "SELECT * FROM findings WHERE content_id=? AND status='open' ORDER BY id", (cid,))
+    # number and list issues in reading order, like notes in the margin of a proof
+    body = v["body"]
+
+    def position(f):
+        at = body.find(f["quote"])
+        return (1 if at == -1 else 0, at, f["id"])
+    findings = sorted(findings, key=position)
     handled = q(db, "SELECT * FROM findings WHERE content_id=? AND status IN ('accepted','edited','rejected','resolved') "
                     "ORDER BY id DESC", (cid,))
     run = q(db, "SELECT * FROM check_runs WHERE content_id=? ORDER BY id DESC LIMIT 1", (cid,), one=True)

@@ -36,7 +36,7 @@ class Flow(unittest.TestCase):
         for path in ("/", "/login", "/trust"):
             r = self.c.get(path)
             self.assertEqual(r.status_code, 200, path)
-        self.assertIn(b"Try this in 3 minutes", self.c.get("/").data)
+        self.assertIn(b"Try it in three minutes", self.c.get("/").data)
         self.assertEqual(self.c.get("/content").status_code, 302)  # login required
 
     def test_2_writer_checks_and_fixes_demo_draft(self):

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Audit log{% endblock %}
 {% block body %}
-<div class="page-head"><div><div class="eyebrow">Accountability</div><h1>Audit log</h1><p>Every check, decision, approval and change, newest first.</p></div></div>
+<div class="page-head"><div><h1>Audit log</h1><p>Every check, decision, approval and change, newest first.</p></div></div>
 <div class="card"><div class="table-wrap"><table>
   <thead><tr><th>When (UTC)</th><th>Who</th><th>Action</th><th>Detail</th></tr></thead>
   <tbody>{% for a in log %}<tr><td><small>{{ a.created_at }}</small></td><td>{{ a.name or a.user_id }}</td><td><b>{{ a.action }}</b></td><td><small>{{ a.detail }}</small></td></tr>{% endfor %}</tbody>

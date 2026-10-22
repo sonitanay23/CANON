@@ -3,18 +3,16 @@
 {% block body %}
 <div class="page-head">
   <div>
-    <div class="eyebrow">{{ 'All content' if me.role in ('admin','reviewer') else 'Your content' }}</div>
     <h1>Content</h1>
     <p>{% if me.role in ('admin','reviewer') %}Everything your teams and agencies are working on, grouped by where it is in review.{% else %}Your drafts and where each one is in review.{% endif %}</p>
   </div>
-  {% if me.role in ('creator','agency','admin') %}<a class="btn primary" href="{{ url_for('content_new') }}">+ New draft</a>{% endif %}
 </div>
 
 {% set order = ['in_review', 'draft', 'changes_requested', 'approved'] if me.role in ('admin','reviewer') else ['draft', 'changes_requested', 'in_review', 'approved'] %}
 {% set notes = {'in_review': 'Waiting for a reviewer', 'draft': 'Not yet submitted', 'changes_requested': 'Sent back with notes', 'approved': 'Live, and re-checked when facts change'} %}
-<div class="grid g2">
+<div class="grid g2" style="gap:2rem 1.5rem">
 {% for key in order %}
-  <section class="card lane">
+  <section class="lane {{ key }}">
     <h2>{{ status_labels[key] }} <span class="count">{{ groups[key]|length }}</span></h2>
     <small>{{ notes[key] }}</small>
     {% if groups[key] %}
@@ -22,9 +20,10 @@
       <div class="item">
         <div>
           <a class="item-title" href="{{ url_for('content_view', cid=c.id) }}">{{ c.title }}</a>
-          <div><small>{{ c.channel }} · {{ c.author_name }}{% if c.author_team and 'agency' in c.author_team %} <span class="badge accent">Agency</span>{% endif %} · updated {{ c.updated_at[:10] }}</small></div>
+          <div><small>{{ c.channel }}, {{ c.author_name }}, updated {{ c.updated_at[:10] }}</small>{% if c.author_team and 'agency' in c.author_team %} <span class="badge accent">Agency</span>{% endif %}</div>
         </div>
         {% if c.open_issues %}<span class="badge {{ 'high' if c.open_issues > 3 else 'medium' }}">{{ c.open_issues }} open</span>
+        {% elif key != 'approved' and not c.checks %}<span class="badge">Not checked yet</span>
         {% elif key != 'approved' %}<span class="badge ok">No open issues</span>{% endif %}
       </div>
       {% endfor %}

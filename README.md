@@ -81,6 +81,8 @@ Browser ──> Flask app (app.py, server-rendered pages)
               └─ canon/db.py        SQLite schema and helpers
 ```
 
+**Design:** Canon is styled as an editor's proofing desk. Drafts are set like a proof sheet (Source Serif 4), and issues appear as blue-pencil underlines with numbered notes in reading order. The interface uses Instrument Sans. Both fonts load from Google Fonts, with system fonts as a fallback.
+
 **Stack:** Python 3.12, Flask, Jinja templates, plain CSS (no front-end build), SQLite, pypdf, gunicorn. AI: Google Gemini API (`gemini-3.1-flash-lite` by default, native `generateContent` endpoint), called over HTTPS with the standard library. The Claude API is supported as an alternative by setting `ANTHROPIC_API_KEY` instead. Rate-limit responses are retried twice with a short wait; if the configured model is unavailable, Canon picks an available Gemini Flash model.
 
 **Data:** SQLite file, created and seeded on first start. On hosts with an ephemeral disk (such as Render's free tier), the demo resets to its starting state whenever the service restarts.

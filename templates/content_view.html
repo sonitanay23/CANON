@@ -8,10 +8,10 @@
 
 <div class="page-head">
   <div>
-    <div class="eyebrow">{{ c.channel }} · by {{ c.author_name }}{% if c.author_role == 'agency' %} ({{ c.author_team }}){% endif %}</div>
+    <div class="eyebrow">{{ c.channel }}, by {{ c.author_name }}{% if c.author_role == 'agency' %} ({{ c.author_team }}){% endif %}</div>
     <h1>{{ c.title }}</h1>
-    <div class="row"><span class="badge {{ c.status }}">{{ status_labels[c.status] }}</span><small>Version {{ v.n }} · saved {{ v.created_at[:16] }}</small>
-      <a href="{{ url_for('content_history', cid=c.id) }}"><small>History &amp; decisions →</small></a></div>
+    <div class="row"><span class="badge {{ c.status }}">{{ status_labels[c.status] }}</span><small>Version {{ v.n }}, saved {{ v.created_at[:16] }} UTC</small>
+      <a href="{{ url_for('content_history', cid=c.id) }}"><small>History and decisions</small></a></div>
   </div>
   <div class="row">
     {% if can_act %}
@@ -51,7 +51,7 @@
 
 <div class="grid review">
   <section class="stack sticky">
-    <div class="card">
+    <div class="sheet">
       <div class="card-head">
         <h2>Draft</h2>
         {% if findings %}<small>Click a highlight to jump to its issue</small>{% endif %}
@@ -71,7 +71,7 @@
     <div class="card" id="comments">
       <h2>Conversation</h2>
       {% for cm in comments %}
-        <div class="item" style="align-items:flex-start"><div><b>{{ cm.name }}</b> <small>· {{ role_labels[cm.role] }} · {{ cm.created_at[:16] }}</small><div>{{ cm.body }}</div></div></div>
+        <div class="item" style="align-items:flex-start"><div><b>{{ cm.name }}</b> <small>{{ role_labels[cm.role] }}, {{ cm.created_at[:16] }}</small><div>{{ cm.body }}</div></div></div>
       {% else %}<small>No comments yet.</small>{% endfor %}
       <form method="post" action="{{ url_for('content_comment', cid=c.id) }}" class="row" style="margin-top:.75rem">
         <input type="text" name="body" placeholder="Add a comment for the team" style="flex:1">
@@ -108,10 +108,10 @@
     <article class="issue {{ f.severity }}" id="f{{ f.id }}">
       <div class="issue-top">
         <div class="row">
-          <span class="badge {{ f.severity }}">{{ nums[f.id] }} · {{ f.severity }}</span>
+          <span class="badge {{ f.severity }}">{{ nums[f.id] }}. {{ f.severity|capitalize }}</span>
           <span class="badge {{ f.method }}">{{ 'AI review' if f.method == 'ai' else 'Rule engine' }}</span>
           {% if f.method == 'ai' %}<small>confidence {{ (f.confidence * 100)|round|int }}%</small>{% endif %}
-          {% if f.needs_review %}<span class="review-flag">· needs human review</span>{% endif %}
+          {% if f.needs_review %}<span class="review-flag">Needs human review</span>{% endif %}
         </div>
         <div class="issue-title">{{ f.issue }}</div>
       </div>

@@ -2,7 +2,7 @@
 {% block title %}Affected content{% endblock %}
 {% block body %}
 <div class="page-head">
-  <div><div class="eyebrow">Fact changed · {{ h.changed_at[:16] }} UTC</div>
+  <div><div class="eyebrow">Fact changed {{ h.changed_at[:16] }} UTC</div>
     <h1>{{ items|length }} approved piece{{ 's' if items|length != 1 }} still say{{ 's' if items|length == 1 }} {{ h.old_value }}</h1>
     <p><span class="chip">{{ fact.id }}</span> {{ fact.label }} changed from <del>{{ h.old_value }}</del> to <ins>{{ h.new_value }}</ins>. Canon found every approved or in-review piece that still uses the old value and drafted the smallest update for each. Nothing changes until you send them to review.</p></div>
   <a class="btn" href="{{ url_for('brand') }}#facts">← Brand rules &amp; facts</a>
@@ -14,7 +14,7 @@
     <label class="card" style="display:block;font-weight:400;cursor:pointer">
       <div class="row spread">
         <div class="row"><input type="checkbox" name="cid" value="{{ it.content.id }}" checked style="width:18px;height:18px">
-          <div><b>{{ it.content.title }}</b><div><small>{{ it.content.channel }} · {{ status_labels[it.content.status] }}{% if it.linked %} · linked to {{ fact.id }} at approval{% else %} · found by text search{% endif %}</small></div></div></div>
+          <div><b>{{ it.content.title }}</b><div><small>{{ it.content.channel }}, {{ status_labels[it.content.status]|lower }}. {% if it.linked %}Linked to {{ fact.id }} when it was approved.{% else %}Found by text search.{% endif %}</small></div></div></div>
         <a class="btn small ghost" href="{{ url_for('content_view', cid=it.content.id) }}">Open</a>
       </div>
       {% for hit in it.hits %}<div class="fix" style="margin:.75rem 0 0">{{ word_diff(hit.quote, hit.fix) }}</div>{% endfor %}
