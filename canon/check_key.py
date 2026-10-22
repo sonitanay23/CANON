@@ -6,6 +6,7 @@ Runs one real check on a short sample and prints what came back.
 """
 import sys
 
+from . import env  # noqa: F401
 from . import ai
 from .db import connect
 from .seed import seed

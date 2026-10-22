@@ -13,6 +13,7 @@ from functools import wraps
 from flask import Flask, abort, flash, g, redirect, render_template, request, session, url_for
 from markupsafe import Markup
 
+from canon import env  # noqa: F401  (loads .env before anything reads settings)
 from canon import ai, services, testset
 from canon.db import (DB_PATH, add_version, audit, close_db, connect, ex, get_db, latest_version, now, q,
                       setting, visible_facts)
