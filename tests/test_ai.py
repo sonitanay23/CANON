@@ -79,6 +79,17 @@ class GeminiTests(unittest.TestCase):
         self.assertIn("gemini-9-flash:generateContent", m.call_args[0][0].full_url)
         self.assertEqual(len(kept), 1)
 
+    def test_overloaded_model_switches_to_another(self):
+        listing = {"models": [
+            {"name": "models/gemini-3.1-flash-lite", "supportedGenerationMethods": ["generateContent"]},
+            {"name": "models/gemini-3-flash-preview", "supportedGenerationMethods": ["generateContent"]}]}
+        calls = [http_error(503), http_error(503), http_error(503), resp(listing), resp(GOOD)]
+        with mock.patch("urllib.request.urlopen", side_effect=calls) as m, mock.patch("time.sleep"):
+            kept, _ = ai.review("It will double your savings fast.", "calm", RULES, [], [], [])
+        self.assertEqual(ai.model(), "gemini-3-flash-preview")
+        self.assertIn("gemini-3-flash-preview:generateContent", m.call_args[0][0].full_url)
+        self.assertEqual(len(kept), 1)
+
     def test_bad_key_gives_clear_message(self):
         with mock.patch("urllib.request.urlopen", side_effect=http_error(401, {"error": {"status": "UNAUTHENTICATED"}})):
             with self.assertRaises(ai.AIUnavailable) as ctx:

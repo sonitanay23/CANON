@@ -107,19 +107,21 @@ def _with_retries(fn):
                 continue
             detail = _error_detail(e)
             hint = {401: "API key rejected", 403: "API key not allowed for this API", 404: "model not found",
-                    429: "rate limit reached, try again in a minute"}.get(e.code, "API error")
+                    429: "rate limit reached, try again in a minute", 500: "AI service busy",
+                    503: "AI service busy", 529: "AI service busy"}.get(e.code, "API error")
             raise AIUnavailable(f"{hint} ({e.code}{', ' + detail if detail else ''})") from e
         except (urllib.error.URLError, TimeoutError, OSError) as e:
             raise AIUnavailable(f"AI service unreachable: {e}") from e
 
 
-def _gemini_pick_model():
-    """If the configured model is gone, pick an available Flash model that can generate text."""
+def _gemini_pick_model(exclude=()):
+    """Pick another available Flash model (used when the configured one is missing or overloaded)."""
     data = _with_retries(lambda: _http(f"{GEMINI_BASE}/models?pageSize=200",
                                        headers={"x-goog-api-key": _key()}, method="GET"))
     names = [m["name"].split("/", 1)[-1] for m in data.get("models", [])
              if "generateContent" in m.get("supportedGenerationMethods", [])]
-    flash = [n for n in names if "flash" in n and not any(x in n for x in ("image", "tts", "live", "audio"))]
+    flash = [n for n in names if "flash" in n and n not in exclude
+             and not any(x in n for x in ("image", "tts", "live", "audio"))]
     stable = [n for n in flash if "preview" not in n and "exp" not in n]
     pool = stable or flash
     if not pool:
@@ -141,9 +143,10 @@ def _gemini_call(system, user, max_tokens):
     try:
         data = _with_retries(go)
     except AIUnavailable as e:
-        if "model not found" not in str(e):
+        if "model not found" not in str(e) and "busy" not in str(e):
             raise
-        _resolved_model["gemini"] = _gemini_pick_model()
+        # the model is gone or overloaded: switch to another available Flash model and try once more
+        _resolved_model["gemini"] = _gemini_pick_model(exclude={model()})
         data = _with_retries(go)
     cands = data.get("candidates") or []
     if not cands:
