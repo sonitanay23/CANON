@@ -98,6 +98,12 @@ class GeminiTests(unittest.TestCase):
         ai._resolved_model["gemini"] = ("gemini-3-flash-preview", 0)  # already expired
         self.assertEqual(ai.model(), "gemini-3.1-flash-lite")
 
+    def test_curly_quotes_and_spacing_still_match(self):
+        text = "Act now, this offer won't last."
+        found = ai.locate(text, "act now,  this offer won\u2019t last")
+        self.assertEqual(found, "Act now, this offer won't last")
+        self.assertIsNone(ai.locate(text, "this offer lasts forever"))
+
     def test_bad_key_gives_clear_message(self):
         with mock.patch("urllib.request.urlopen", side_effect=http_error(401, {"error": {"status": "UNAUTHENTICATED"}})):
             with self.assertRaises(ai.AIUnavailable) as ctx:

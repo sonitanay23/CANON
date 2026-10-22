@@ -31,6 +31,9 @@ def main():
     print(f"OK: {len(kept)} finding(s) kept, {dropped} dropped by validation")
     for f in kept:
         print(f"  {f['ref']} [{f['severity']}, {int(f['confidence'] * 100)}%] \"{f['quote']}\" -> \"{f['fix']}\"")
+    for reason, f in ai.LAST_DROPPED:
+        quote = f.get("quote", "") if isinstance(f, dict) else ""
+        print(f"  dropped: {reason}: \"{quote}\"")
     return 0
 
 

@@ -221,16 +221,27 @@ Return JSON only, in this shape:
 {"findings": [{"quote": "...", "issue": "...", "ref": "R-01 or F-01", "severity": "low|medium|high",
 "confidence": 0.0-1.0, "intent": "...", "fix": "..."}]}
 
-Instructions:
-- "quote" must be copied character-for-character from the draft and be as short as possible
-  (a word, phrase or single sentence).
-- "ref" must be one ID from the lists provided. If you cannot point to a listed rule or fact, do not report it.
+How to review:
+1. Read the draft one sentence at a time.
+2. For EACH sentence, test it against EVERY rule marked [tone] or [claim], one by one.
+3. Report a finding for each sentence that breaks one of those rules. Several findings per draft is normal.
+
+Choosing the rule ("ref"):
+- Use the rule whose description matches the problem most specifically.
+- A promise or performance claim that is not backed by an approved fact (e.g. "will double your savings")
+  belongs to the [claim] rule about claims matching approved facts, even if it also sounds like a guarantee.
+- Urgency, fear or pressure ("hurry", "last chance", "act now", "before you lose out", "don't miss out")
+  belongs to the [tone] rule about pressure tactics.
+- If you cannot point to a listed rule or fact, do not report it.
+
+Each finding:
+- "quote" must be copied character-for-character from the draft (same punctuation and apostrophes),
+  as short as possible: a phrase or a single sentence.
 - "intent": one short line describing what the writer was trying to say.
 - "fix": the smallest replacement for "quote" that keeps that intent and follows the rule.
   Never add a number, claim or promise that is not in the approved facts.
-- Focus on tone, unsupported or exaggerated claims, and facts stated differently from the approved list.
-- Do not report spelling preferences, banned words or disclaimers already listed in "Already found".
-- If the draft is fine, return {"findings": []}."""
+- Do not report banned words, spellings or disclaimers already listed in "Already found".
+- If the draft breaks no [tone] or [claim] rule, return {"findings": []}."""
 
 
 def build_review_prompt(draft, voice, rules, facts, already):
@@ -242,18 +253,57 @@ def build_review_prompt(draft, voice, rules, facts, already):
             f"Already found by the rule engine:\n{found}\n\nDraft:\n<<<\n{draft}\n>>>")
 
 
+QUOTE_MAP = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"', "\u2013": "-", "\u2014": "-"})
+LAST_DROPPED = []  # (reason, finding) from the most recent validate() call, for debugging
+
+
+def locate(original, quote):
+    """Find quote in original, tolerating quote style, spacing and case. Returns the original span or None."""
+    if not quote:
+        return None
+    if quote in original:
+        return quote
+
+    def norm(t):
+        out, idx = [], []
+        prev_space = False
+        for i, ch in enumerate(t.translate(QUOTE_MAP).lower()):
+            if ch.isspace():
+                if prev_space:
+                    continue
+                ch, prev_space = " ", True
+            else:
+                prev_space = False
+            out.append(ch)
+            idx.append(i)
+        return "".join(out), idx
+    n_orig, idx = norm(original)
+    n_quote, _ = norm(quote.strip())
+    at = n_orig.find(n_quote.strip())
+    if at == -1 or not n_quote.strip():
+        return None
+    start, end = idx[at], idx[at + len(n_quote.strip()) - 1] + 1
+    return original[start:end]
+
+
 def validate(raw_findings, original_text, mapping, valid_refs):
     """Keep only findings that quote the draft and cite a visible rule or fact."""
     kept, dropped = [], 0
+    LAST_DROPPED.clear()
     for f in raw_findings if isinstance(raw_findings, list) else []:
         if not isinstance(f, dict):
             dropped += 1
+            LAST_DROPPED.append(("not an object", f))
             continue
-        quote = unredact(str(f.get("quote", "")).strip(), mapping)
+        quote = locate(original_text, unredact(str(f.get("quote", "")).strip(), mapping))
         fix = unredact(str(f.get("fix", "")).strip(), mapping)
         ref = str(f.get("ref", "")).strip().upper()
-        if not quote or quote not in original_text or ref not in valid_refs or not fix or fix == quote:
+        reason = ("quote not found in the draft" if not quote else
+                  f"cites {ref or 'nothing'}, which is not a rule or fact this user can see" if ref not in valid_refs else
+                  "no fix given" if not fix or fix == quote else "")
+        if reason:
             dropped += 1
+            LAST_DROPPED.append((reason, f))
             continue
         try:
             conf = max(0.0, min(1.0, float(f.get("confidence", 0.5))))

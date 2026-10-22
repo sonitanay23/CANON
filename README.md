@@ -52,9 +52,14 @@ An admin can reset the demo to its starting state from the home page.
 - **Human review.** Findings with confidence under 0.6, or with high severity, are marked for human review. Nothing is applied automatically.
 - **Graceful failure.** If there's no API key, the call fails, or the model returns invalid JSON twice, Canon still shows the rule-engine results and says the AI review was unavailable.
 
-## Reliability results (rule engine only, measured)
+## Reliability results (measured)
 
-On the 25-piece test set with AI off: **13 of 13** rule-detectable planted issues caught, **0** false flags, **0** flags on the 10 clean pieces. The 2 tone and claim issues (T14, T15) need the AI and are reported as missed when it is off. Run the test set from the **Reliability** page, with or without AI.
+| Run | Planted issues caught | Rule-detectable | Tone & claim (AI) | False flags |
+|---|---|---|---|---|
+| Rule engine only | 13 of 15 (87%) | 13 of 13 | 0 of 2 | 0 (0 on clean pieces) |
+| First run with Gemini (22 Oct) | 13 of 15 (87%) | 13 of 13 | 0 of 2 | 0 (0 on clean pieces) |
+
+In the first Gemini run the primary model was overloaded and Canon switched to a fallback model, and the AI added no findings. After that run we (1) changed the fallback to prefer known Gemini text models, (2) made quote matching tolerant of curly quotes and spacing, which had caused valid AI findings to be dropped, (3) made the review prompt check every sentence against each tone and claim rule, and (4) added a line to the Reliability page showing how many pieces the AI actually answered. These changes were not tuned on the planted test pieces' wording. Re-run the test set from the **Reliability** page to see current numbers.
 
 ---
 
