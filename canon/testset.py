@@ -105,6 +105,9 @@ def run(run_id, use_ai, db_path=None):
             ex(conn, "UPDATE reliability_runs SET progress=? WHERE id=?", (i + 1, run_id))
         summary = score(results, rules_by_id)
         summary["ai_dropped"] = dropped_total
+        summary["ai_answered"] = sum(1 for r in results if r["ai_status"] == "ok")
+        failures = [r["ai_status"] for r in results if r["ai_status"] not in ("ok", "off")]
+        summary["ai_error"] = max(set(failures), key=failures.count) if failures else ""
         summary["ai_status"] = "ok" if any(r["ai_status"] == "ok" for r in results) else results[0]["ai_status"]
         ex(conn, "UPDATE reliability_runs SET status='done', results_json=?, summary_json=?, finished_at=? WHERE id=?",
            (json.dumps(results), json.dumps(summary), now(), run_id))

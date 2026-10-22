@@ -24,7 +24,11 @@
     <div class="card stat"><div class="n">{{ summary.ai_detected }}/{{ summary.ai_expected }}</div><div class="l">tone &amp; claim issues caught {{ '(needs AI)' if not run.with_ai }}</div></div>
     <div class="card stat"><div class="n">{{ summary.false_flags }}</div><div class="l">false flags ({{ (summary.false_share*100)|round|int }}% of {{ summary.flags }} flags); {{ summary.clean_flags }} on clean pieces</div></div>
   </div>
-  {% if run.with_ai %}<p class="hint" style="margin-top:.6rem">{{ summary.ai_dropped }} AI suggestion{{ 's' if summary.ai_dropped != 1 }} dropped by validation for not quoting the text exactly or not citing a valid rule or fact.</p>{% endif %}
+  {% if run.with_ai %}
+  <p class="hint" style="margin-top:.6rem">
+    The AI answered on <b>{{ summary.ai_answered if summary.ai_answered is defined else '?' }} of {{ results|length }}</b> pieces{% if summary.ai_error %}; on the rest it was unavailable ({{ summary.ai_error.replace('unavailable: ', '') }}), so only rule-engine results count there{% endif %}.
+    {{ summary.ai_dropped }} AI suggestion{{ 's' if summary.ai_dropped != 1 }} dropped by validation for not quoting the text exactly or not citing a valid rule or fact.
+  </p>{% endif %}
   <div class="card" style="margin-top:1rem"><div class="table-wrap"><table>
     <thead><tr><th>Test</th><th>Text</th><th>Expected</th><th>Canon found</th><th>Result</th></tr></thead>
     <tbody>
@@ -36,7 +40,8 @@
       <td>{% for f in r.found %}<span class="chip">{{ f }}</span> {% else %}<small class="faint">nothing</small>{% endfor %}</td>
       <td>{% if r.missed %}<span class="badge high">missed {{ r.missed|join(', ') }}</span>{% endif %}
           {% if r.extra %}<span class="badge medium">extra {{ r.extra|join(', ') }}</span>{% endif %}
-          {% if not r.missed and not r.extra %}<span class="badge ok">correct</span>{% endif %}</td>
+          {% if not r.missed and not r.extra %}<span class="badge ok">correct</span>{% endif %}
+          {% if run.with_ai and r.ai_status != 'ok' %}<div><small class="faint">AI unavailable</small></div>{% endif %}</td>
     </tr>
     {% endfor %}
     </tbody></table></div></div>
