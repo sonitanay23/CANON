@@ -8,6 +8,8 @@
   <div class="grid g2" style="margin-top:1.25rem">
     <div class="card"><h3>Checked without AI</h3><p class="muted">Banned words, preferred terms, required disclaimers, punctuation rules, and numbers that don't match the fact ledger. These are exact, repeatable checks with no AI involved.</p></div>
     <div class="card"><h3>Checked with AI</h3><p class="muted">Tone, unsupported or exaggerated claims, what the writer meant, and the wording of a suggested fix. Every AI finding is labelled and shows a confidence score.</p></div>
+    <div class="card"><h3>Measured in images, without AI</h3><p class="muted">Text contrast (WCAG 2.1 AA), retired logos and missing alt text are measurements, not opinions. The same image always gives the same result.</p></div>
+    <div class="card"><h3>Reading text in images</h3><p class="muted">Canon uses Tesseract OCR when it's installed. Where it isn't (as on this hosted demo), the image is sent to the AI to read its text and draft alt text. People can correct what was read before it's checked.</p></div>
   </div>
 
   <div class="card" style="margin-top:1rem">
@@ -24,8 +26,8 @@
 
   <div class="card">
     <h2>What is sent to the AI service</h2>
-    <p>When AI review is on, Canon sends the draft text, the brand voice, the active rules and the facts the author is allowed to see to the AI service{% if ai_provider == 'gemini' %} (Google Gemini API){% elif ai_provider == 'anthropic' %} (Claude API, Anthropic){% endif %}. Before sending, {{ terms_count }} confidential term{{ 's are' if terms_count != 1 else ' is' }} replaced with placeholders. Names and emails of users are never sent.</p>
-    <p class="muted">Masking only covers terms on the confidential list; it can't recognise confidential information that isn't listed. Agency partners' drafts are checked only against facts shared with partners, so internal facts never leave the company through an agency draft.</p>
+    <p>When AI review is on, Canon sends the draft text (and, where no local OCR is installed, uploaded images), the brand voice, the active rules and the facts the author is allowed to see to the AI service{% if ai_provider == 'gemini' %} (Google Gemini API){% elif ai_provider == 'anthropic' %} (Claude API, Anthropic){% endif %}. Before sending, {{ terms_count }} confidential term{{ 's are' if terms_count != 1 else ' is' }} replaced with placeholders. Names and emails of users are never sent.</p>
+    <p class="muted">Masking only covers terms on the confidential list; it can't recognise confidential information that isn't listed, and it can't mask text inside an image that is sent for reading. Agency partners' drafts are checked only against facts shared with partners, so internal facts never leave the company through an agency draft.</p>
     {% if ai_provider == 'gemini' %}
     <p class="flash info" style="margin:.5rem 0"><b>This demo uses Google's free Gemini API tier.</b> Under Google's terms for unpaid services, submitted content may be used to improve Google's products and may be read by human reviewers, and Google asks users not to submit sensitive or confidential information. That's acceptable here because all demo data is fictional. A real deployment would use a paid tier, where these terms differ.</p>
     {% endif %}
