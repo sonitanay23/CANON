@@ -6,7 +6,7 @@ import json
 import re
 from collections import OrderedDict
 
-from . import ai, rules as engine
+from . import ai, rules as engine, seals, vision
 from .db import add_version, audit, ex, latest_version, now, q, setting, visible_facts
 
 FLAG_MIN_DECISIONS = 10
@@ -72,16 +72,109 @@ def analyse(conn, text, role, use_ai=True):
 
 def save_finding(conn, content_id, version_n, f):
     ex(conn, """INSERT INTO findings(content_id,version_n,quote,issue,ref,method,severity,confidence,
-                intent,fix,action,needs_review,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,'open',?)""",
+                intent,fix,action,needs_review,status,created_at,target,box) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,'open',?,?,?)""",
        (content_id, version_n, f["quote"], f["issue"], f["ref"], f["method"], f["severity"],
-        f["confidence"], f["intent"], f["fix"], f.get("action", "replace"), f["needs_review"], now()))
+        f["confidence"], f["intent"], f["fix"], f.get("action", "replace"), f["needs_review"], now(),
+        f.get("target", "text"), json.dumps(f["box"]) if f.get("box") else None))
+
+
+def latest_asset(conn, content_id):
+    return q(conn, "SELECT * FROM assets WHERE content_id=? ORDER BY n DESC LIMIT 1", (content_id,), one=True)
+
+
+def add_asset(conn, content_id, data, filename, alt_text, user, ocr_lines=None):
+    """Store a new image version for a piece of content and measure it. Raises vision.BadImage."""
+    im = vision.load(data)
+    retired = q(conn, "SELECT * FROM logos WHERE status='retired'")
+    current = q(conn, "SELECT * FROM logos WHERE status='current'")
+    result = vision.analyse(im, retired, ocr_lines=ocr_lines, current_logos=current)
+    prev = latest_asset(conn, content_id)
+    n = (prev["n"] + 1) if prev else 1
+    if alt_text is None and prev:
+        alt_text = prev["alt_text"]
+    mime = {"PNG": "image/png", "JPEG": "image/jpeg", "WEBP": "image/webp"}.get(
+        vision.Image.open(__import__("io").BytesIO(data)).format, "image/png")
+    aid = ex(conn, """INSERT INTO assets(content_id,n,filename,mime,data,sha,phash,width,height,alt_text,ocr_text,
+                     ocr_method,ocr_lines,visual_json,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+             (content_id, n, (filename or "image")[:120], mime, data, vision.sha(data), vision.dhash(im),
+              im.size[0], im.size[1], (alt_text or "").strip(), "\n".join(ln["text"] for ln in result["lines"]),
+              result["ocr_method"], vision.to_json(result["lines"]), vision.to_json(result),
+              user["id"], now()))
+    ex(conn, "UPDATE content SET updated_at=? WHERE id=?", (now(), content_id))
+    audit(conn, user["id"], "image added", f"content {content_id} image v{n} ({result['ocr_method']} text reading)")
+    return aid
+
+
+def _box_for(quote, lines):
+    ql = quote.lower()
+    for ln in lines:
+        if ln.get("box") and (ql in ln["text"].lower() or ln["text"].lower() in ql):
+            return ln["box"]
+    return None
+
+
+def image_findings(conn, asset, role, body):
+    """Findings for the image: its text through the normal checks, then contrast, logo and alt text."""
+    result = json.loads(asset["visual_json"] or "{}")
+    lines = json.loads(asset["ocr_lines"] or "[]")
+    active = {r["id"] for r in q(conn, "SELECT id FROM rules WHERE active=1")}
+    out, ai_status, dropped = [], "off", 0
+    if (asset["ocr_text"] or "").strip():
+        found, ai_status, dropped = analyse(conn, asset["ocr_text"], role)
+        for f in found:
+            if f.get("action") == "append":
+                # a disclaimer the image needs goes in the caption, unless the caption already has it
+                if f["fix"].lower().rstrip(".") in (body or "").lower():
+                    continue
+                f["issue"] += " (triggered by text in the image)"
+                f["target"] = "text"
+            else:
+                f["target"], f["action"] = "image", "artwork"
+                f["box"] = _box_for(f["quote"], lines)
+            out.append(f)
+    if "R-14" in active:
+        for c in result.get("contrast", []):
+            if c["ok"]:
+                continue
+            out.append({"quote": c["text"], "ref": "R-14", "method": "rule", "action": "artwork", "target": "image",
+                        "issue": f"Text contrast is {c['ratio']}:1 ({c['fg']} on {c['bg']}); WCAG AA needs {c['need']:g}:1"
+                                 f" for {'large' if c['large'] else 'normal'} text",
+                        "severity": "high" if c["ratio"] < 3 else "medium", "confidence": 1.0, "needs_review": 0,
+                        "intent": "Keep the line, make it readable for everyone.",
+                        "fix": f"Set this line in {c['suggest']} (contrast {c['suggest_ratio']}:1 on this background)",
+                        "box": c["box"]})
+    if "R-16" in active:
+        for lg in result.get("logos", []):
+            out.append({"quote": f"Retired logo: {lg['name']}", "ref": "R-16", "method": "rule", "action": "artwork",
+                        "target": "image", "issue": f"Uses the retired logo \"{lg['name']}\" ({int(lg['score'] * 100)}% shape match)",
+                        "severity": "high", "confidence": lg["score"], "needs_review": 0,
+                        "intent": "Show the brand mark.", "fix": "Replace it with the current Velora Money logo",
+                        "box": lg["box"]})
+    if "R-15" in active:
+        problem = vision.alt_problem(asset["alt_text"], asset["filename"])
+        if problem:
+            suggestion = result.get("alt_suggestion") or ""
+            out.append({"quote": asset["alt_text"] or "(no alt text)", "ref": "R-15", "method": "rule", "action": "alt",
+                        "target": "image", "issue": problem, "severity": "medium", "confidence": 1.0,
+                        "needs_review": 0, "intent": "Describe the image for people who can't see it.",
+                        "fix": suggestion, "box": None})
+    return out, ai_status, dropped
 
 
 def run_check(conn, content_id, user):
     v = latest_version(conn, content_id)
     author = q(conn, "SELECT u.role FROM content c JOIN users u ON u.id=c.author_id WHERE c.id=?",
                (content_id,), one=True)
-    findings, ai_status, dropped = analyse(conn, v["body"], author["role"] if author else user["role"])
+    role = author["role"] if author else user["role"]
+    findings, ai_status, dropped = analyse(conn, v["body"], role) if v["body"].strip() else ([], "off", 0)
+    asset = latest_asset(conn, content_id)
+    if asset:
+        img, img_status, img_dropped = image_findings(conn, asset, role, v["body"])
+        have = {(f["ref"], f.get("action")) for f in findings if f.get("action") == "append"}
+        findings += [f for f in img if not (f.get("action") == "append" and (f["ref"], "append") in have)]
+        dropped += img_dropped
+        if ai_status == "off" or (ai_status == "ok" and img_status not in ("ok", "off")):
+            ai_status = img_status
     ex(conn, "UPDATE findings SET status='superseded' WHERE content_id=? AND status='open'", (content_id,))
     for f in findings:
         save_finding(conn, content_id, v["n"], f)
@@ -116,8 +209,19 @@ def decide(conn, finding_id, action, user, reason="", edited_fix=None):
     f = q(conn, "SELECT * FROM findings WHERE id=?", (finding_id,), one=True)
     if not f or f["status"] != "open":
         return "This issue was already handled."
-    if action in ("accept", "edit"):
+    if action in ("accept", "edit") and f["action"] == "alt":
+        alt = (edited_fix if action == "edit" else f["fix"]) or ""
+        if vision.alt_problem(alt):
+            return "Write alt text that describes the image (at least a short sentence)."
+        asset = latest_asset(conn, f["content_id"])
+        ex(conn, "UPDATE assets SET alt_text=? WHERE id=?", (alt.strip(), asset["id"]))
+        status = "accepted" if action == "accept" else "edited"
+    elif action in ("accept", "edit") and f["action"] == "artwork":
+        return "This is in the artwork itself. Upload a corrected image, or keep it and give a reason."
+    elif action in ("accept", "edit"):
         fix = edited_fix if action == "edit" else f["fix"]
+        if not (fix or "").strip() and f["action"] == "append":
+            return "The fix can't be empty."
         v = latest_version(conn, f["content_id"])
         new_body = apply_fix(v["body"], f["quote"], fix, f["action"] or "replace")
         if new_body is None:
@@ -130,10 +234,11 @@ def decide(conn, finding_id, action, user, reason="", edited_fix=None):
             return "Please give a short reason for keeping the original text."
         status = "rejected"
     ex(conn, "UPDATE findings SET status=? WHERE id=?", (status, finding_id))
-    if status in ("accepted", "edited"):
+    if status in ("accepted", "edited") and f["action"] in ("replace", "append"):
         # other open issues whose text disappeared with this edit are resolved by it
         body = latest_version(conn, f["content_id"])["body"]
-        for other in q(conn, "SELECT id, quote FROM findings WHERE content_id=? AND status='open'", (f["content_id"],)):
+        for other in q(conn, "SELECT id, quote FROM findings WHERE content_id=? AND status='open' "
+                             "AND COALESCE(target,'text')='text' AND action!='append'", (f["content_id"],)):
             if other["quote"] not in body:
                 ex(conn, "UPDATE findings SET status='resolved' WHERE id=?", (other["id"],))
     ex(conn, "INSERT INTO decisions(finding_id,content_id,rule_ref,action,reason,user_id,created_at) VALUES(?,?,?,?,?,?,?)",
@@ -151,8 +256,10 @@ def approve(conn, content_id, user):
     for link in engine.claim_links(v["body"], facts):
         ex(conn, "INSERT INTO claim_links(content_id,fact_id,quote,value) VALUES(?,?,?,?)",
            (content_id, link["fact_id"], link["quote"], link["value"]))
-    ex(conn, "UPDATE content SET status='approved', updated_at=? WHERE id=?", (now(), content_id))
-    audit(conn, user["id"], "approved", f"content {content_id} v{v['n']}")
+    ex(conn, "UPDATE content SET status='approved', updated_at=?, approved_at=? WHERE id=?", (now(), now(), content_id))
+    code = seals.issue(conn, content_id, user)
+    audit(conn, user["id"], "approved", f"content {content_id} v{v['n']}, seal {code}")
+    return code
 
 
 # ---------- improvement 1: fact change -> affected content ----------
@@ -177,11 +284,14 @@ def affected_by(conn, history_id):
     items = []
     for c in q(conn, "SELECT * FROM content WHERE status IN ('approved','in_review') ORDER BY id"):
         body = latest_version(conn, c["id"])["body"]
+        asset = latest_asset(conn, c["id"])
         hits = []
-        for vm, sent in engine.fact_mentions(body, old_fact):
-            if engine._norm(vm.group(0)) == engine._norm(h["old_value"]):
-                hits.append({"quote": sent, "old": vm.group(0).strip(),
-                             "fix": sent.replace(vm.group(0).strip(), h["new_value"], 1)})
+        sources = [("text", body)] + ([("image", asset["ocr_text"] or "")] if asset else [])
+        for where, text in sources:
+            for vm, sent in engine.fact_mentions(text, old_fact):
+                if engine._norm(vm.group(0)) == engine._norm(h["old_value"]):
+                    hits.append({"quote": sent, "old": vm.group(0).strip(), "where": where,
+                                 "fix": sent.replace(vm.group(0).strip(), h["new_value"], 1)})
         linked = q(conn, "SELECT 1 FROM claim_links WHERE content_id=? AND fact_id=?", (c["id"], h["fact_id"]), one=True)
         if hits:
             items.append({"content": c, "hits": hits, "linked": bool(linked)})
@@ -196,11 +306,27 @@ def send_fixes(conn, history_id, content_ids, user):
         if str(cid) not in content_ids:
             continue
         body = latest_version(conn, cid)["body"]
-        for hit in item["hits"]:
+        text_hits = [x for x in item["hits"] if x["where"] == "text"]
+        image_hits = [x for x in item["hits"] if x["where"] == "image"]
+        for hit in text_hits:
             body = apply_fix(body, hit["quote"], hit["fix"]) or body
-        add_version(conn, cid, body, user["id"], note=f"Updated {h['fact_id']}: {h['old_value']} → {h['new_value']}")
-        ex(conn, "UPDATE content SET status='in_review', updated_at=? WHERE id=?", (now(), cid))
-        audit(conn, user["id"], "fix-forward", f"content {cid} sent to review after {h['fact_id']} change")
+        if text_hits:
+            add_version(conn, cid, body, user["id"], note=f"Updated {h['fact_id']}: {h['old_value']} → {h['new_value']}")
+        seals.supersede(conn, cid)
+        if image_hits:
+            # artwork can't be edited automatically: send it back to its author with exact instructions
+            ex(conn, "UPDATE content SET status='changes_requested', updated_at=? WHERE id=?", (now(), cid))
+            lines = "; ".join(f"\"{x['quote']}\" should read \"{x['fix']}\"" for x in image_hits)
+            ex(conn, "INSERT INTO comments(content_id,user_id,body,created_at) VALUES(?,?,?,?)",
+               (cid, user["id"], f"{h['fact_id']} changed from {h['old_value']} to {h['new_value']}. "
+                                 f"The image still shows the old value: {lines}. Please upload updated artwork.", now()))
+            run_check(conn, cid, user)
+            audit(conn, user["id"], "fix-forward", f"content {cid} sent back for new artwork after {h['fact_id']} change")
+        else:
+            ex(conn, "UPDATE content SET status='in_review', updated_at=?, submitted_at=? WHERE id=?", (now(), now(), cid))
+            run_check(conn, cid, user)
+            route(conn, cid)
+            audit(conn, user["id"], "fix-forward", f"content {cid} sent to review after {h['fact_id']} change")
         sent += 1
     return sent
 
@@ -234,3 +360,87 @@ def group_reasons(reasons):
         key = re.sub(r"[^a-z ]", "", r.lower()).strip()[:60]
         groups.setdefault(key, []).append(r)
     return sorted(([v[0], len(v)] for v in groups.values()), key=lambda x: -x[1])
+
+
+# ---------- improvement 3: risk-based routing ----------
+
+LEGAL_REFS = {"R-01", "R-02", "R-07", "R-10", "R-13"}
+LEGAL_WORDS = re.compile(r"\b(?:invest\w*|returns?|interest|p\.a\.|guarantee\w*|risk[- ]free|insur\w*|loan|credit)\b", re.I)
+HIGH_REACH = {"Ad", "Email", "Website", "Sales"}
+LANES = {
+    "fast": {"label": "Fast lane", "sla_hours": 4, "who": "Any reviewer, one click"},
+    "standard": {"label": "Standard review", "sla_hours": 24, "who": "Marketing reviewer"},
+    "legal": {"label": "Legal review", "sla_hours": 48, "who": "Legal & compliance"},
+}
+
+
+def assess_risk(conn, content_id):
+    """Score a piece before review. Every point has a stated reason, so routing is explainable."""
+    c = q(conn, "SELECT c.*, u.role AS author_role FROM content c JOIN users u ON u.id=c.author_id WHERE c.id=?",
+          (content_id,), one=True)
+    v = latest_version(conn, content_id)
+    asset = latest_asset(conn, content_id)
+    text = v["body"] + "\n" + ((asset["ocr_text"] or "") if asset else "")
+    open_f = q(conn, "SELECT * FROM findings WHERE content_id=? AND status='open'", (content_id,))
+    kept = q(conn, "SELECT * FROM findings WHERE content_id=? AND status='rejected' AND version_n<=?", (content_id, v["n"]))
+    run = q(conn, "SELECT * FROM check_runs WHERE content_id=? ORDER BY id DESC LIMIT 1", (content_id,), one=True)
+    score, reasons, legal = 0, [], []
+
+    def add(points, why):
+        nonlocal score
+        score += points
+        reasons.append([points, why])
+    if not run or run["version_n"] != v["n"]:
+        add(3, "The latest version hasn't been checked")
+    high = [f for f in open_f if f["severity"] == "high"]
+    if high:
+        add(3 * len(high), f"{len(high)} high-severity issue{'s' if len(high) != 1 else ''} still open")
+    other = len(open_f) - len(high)
+    if other:
+        add(other, f"{other} other open issue{'s' if other != 1 else ''}")
+    if kept:
+        add(len(kept), f"{len(kept)} suggestion{'s' if len(kept) != 1 else ''} overridden by the writer")
+    if c["channel"] in HIGH_REACH:
+        add(1, f"{c['channel']} is a high-reach channel")
+    if c["author_role"] == "agency":
+        add(1, "Written by an outside agency")
+    if asset:
+        add(1, "Includes an image")
+    if run and run["ai_status"] not in ("ok", "off") and "no API key" not in run["ai_status"]:
+        add(1, "AI review was unavailable, so only rule checks ran")
+    m = LEGAL_WORDS.search(text)
+    if m:
+        legal.append(f"Mentions \"{m.group(0)}\" (financial claim language)")
+    claim_refs = {f["ref"] for f in list(open_f) + list(kept)} & LEGAL_REFS
+    if claim_refs:
+        legal.append("Has open or overridden claim/disclaimer issues (" + ", ".join(sorted(claim_refs)) + ")")
+    if legal:
+        lane = "legal"
+        reasons += [[0, why] for why in legal]
+    elif score <= 2 and not open_f:
+        lane = "fast"
+    else:
+        lane = "standard"
+    return min(score, 20), lane, reasons
+
+
+def route(conn, content_id):
+    score, lane, reasons = assess_risk(conn, content_id)
+    if lane == "legal":
+        who = q(conn, "SELECT id FROM users WHERE role='reviewer' AND team LIKE 'Legal%' LIMIT 1", one=True)
+    else:
+        who = q(conn, "SELECT id FROM users WHERE role='reviewer' AND team NOT LIKE 'Legal%' LIMIT 1", one=True)
+    ex(conn, "UPDATE content SET lane=?, risk=?, risk_reasons=?, assignee_id=? WHERE id=?",
+       (lane, score, json.dumps(reasons), who["id"] if who else None, content_id))
+    return lane
+
+
+def can_approve(user, content):
+    """Legal-lane content needs Legal (or a brand admin); everything else any reviewer."""
+    if user["role"] == "admin":
+        return True
+    if user["role"] != "reviewer":
+        return False
+    if content["lane"] == "legal":
+        return (user["team"] or "").startswith("Legal")
+    return True

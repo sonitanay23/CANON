@@ -3,34 +3,46 @@
 {% block body %}
 <div class="page-head">
   <div>
-    <h1>Content</h1>
-    <p>{% if me.role in ('admin','reviewer') %}Everything your teams and agencies are working on, grouped by where it is in review.{% else %}Your drafts and where each one is in review.{% endif %}</p>
+    <div class="eyebrow">{{ brand }}</div>
+    <h1>{{ 'Content' if me.role in ('admin','reviewer') else 'My drafts' }}</h1>
+    <p>{% if me.role in ('admin','reviewer') %}Everything your teams and agencies are working on, grouped by where it is in review.{% else %}Your drafts and where each one is in review. Open one to check it, fix it and submit it.{% endif %}</p>
   </div>
+  {% if me.role in ('creator','agency','admin') %}<a class="btn primary" href="{{ url_for('content_new') }}">+ New draft</a>{% endif %}
 </div>
 
+{% if total == 0 %}
+<div class="card empty"><div class="big">✎</div><b>No drafts yet.</b><br><small>Start with <a href="{{ url_for('content_new') }}">a new draft</a>: paste text, upload a PDF or add an image.</small></div>
+{% else %}
 {% set order = ['in_review', 'draft', 'changes_requested', 'approved'] if me.role in ('admin','reviewer') else ['draft', 'changes_requested', 'in_review', 'approved'] %}
-{% set notes = {'in_review': 'Waiting for a reviewer', 'draft': 'Not yet submitted', 'changes_requested': 'Sent back with notes', 'approved': 'Live, and re-checked when facts change'} %}
-<div class="grid g2" style="gap:2rem 1.5rem">
+{% set notes = {'in_review': 'Waiting for a reviewer', 'draft': 'Not yet submitted', 'changes_requested': 'Sent back with notes', 'approved': 'Sealed, and re-checked when facts change'} %}
+<div class="grid g2" style="gap:1.5rem">
 {% for key in order %}
-  <section class="lane {{ key }}">
+  <section class="lane {{ key }} reveal" style="--d:{{ loop.index0 }}">
     <h2>{{ status_labels[key] }} <span class="count">{{ groups[key]|length }}</span></h2>
     <small>{{ notes[key] }}</small>
     {% if groups[key] %}
       {% for c in groups[key] %}
-      <div class="item">
-        <div>
-          <a class="item-title" href="{{ url_for('content_view', cid=c.id) }}">{{ c.title }}</a>
-          <div><small>{{ c.channel }}, {{ c.author_name }}, updated {{ c.updated_at[:10] }}</small>{% if c.author_team and 'agency' in c.author_team %} <span class="badge accent">Agency</span>{% endif %}</div>
+      <a class="item" href="{{ url_for('content_view', cid=c.id) }}" style="text-decoration:none;color:inherit">
+        <div class="row" style="flex-wrap:nowrap;gap:.75rem;min-width:0">
+          {% if c.asset_id %}<img class="thumb" src="{{ url_for('asset_file', aid=c.asset_id) }}" alt="" loading="lazy">{% endif %}
+          <div style="min-width:0">
+            <span class="item-title">{{ c.title }}</span>
+            <div><small>{{ c.channel }} · {{ c.author_name }} · {{ c.updated_at[:10] }}</small>
+              {% if c.author_team and 'agency' in c.author_team %} <span class="badge visual">Agency</span>{% endif %}
+              {% if c.lane and key == 'in_review' %} <span class="badge {{ c.lane }}">{{ lanes[c.lane].label }}</span>{% endif %}</div>
+          </div>
         </div>
         {% if c.open_issues %}<span class="badge {{ 'high' if c.open_issues > 3 else 'medium' }}">{{ c.open_issues }} open</span>
-        {% elif key != 'approved' and not c.checks %}<span class="badge">Not checked yet</span>
-        {% elif key != 'approved' %}<span class="badge ok">No open issues</span>{% endif %}
-      </div>
+        {% elif key == 'approved' %}<span class="badge ok">✓ Sealed</span>
+        {% elif not c.checks %}<span class="badge">Not checked yet</span>
+        {% else %}<span class="badge ok">No open issues</span>{% endif %}
+      </a>
       {% endfor %}
     {% else %}
-      <div class="empty"><small>Nothing here right now.</small></div>
+      <div class="empty" style="padding:1.2rem"><small>Nothing here right now.</small></div>
     {% endif %}
   </section>
 {% endfor %}
 </div>
+{% endif %}
 {% endblock %}

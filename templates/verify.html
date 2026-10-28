@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Verify content{% endblock %}
+{% block body %}
+<div class="verify-hero reveal">
+  <div class="grid g2" style="align-items:center;gap:2rem">
+    <div>
+      <div class="eyebrow">Public verification · no sign-in needed</div>
+      <h1>Is this really from {{ brand }}?</h1>
+      <p class="muted" style="max-width:52ch">Every piece {{ brand }} approves gets a signed seal. Paste a post, upload an image or enter a seal code. Canon tells you if it's <b>approved</b>, <b>outdated</b>, or <b>modified</b> after approval, and shows exactly what changed.</p>
+    </div>
+    <div class="row" style="justify-content:center;gap:1rem">
+      <div class="seal"><span><span class="big">✓</span>Approved</span></div>
+      <div class="seal outdated"><span><span class="big">↻</span>Outdated</span></div>
+      <div class="seal bad"><span><span class="big">≠</span>Modified</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="grid review" style="margin-top:1.5rem;align-items:start">
+  <section class="card">
+    <div class="tabs" role="tablist">
+      <a class="{{ 'on' if mode == 'text' }}" href="{{ url_for('verify', mode='text') }}">Paste text</a>
+      <a class="{{ 'on' if mode == 'image' }}" href="{{ url_for('verify', mode='image') }}">Upload an image</a>
+      <a class="{{ 'on' if mode == 'code' }}" href="{{ url_for('verify', mode='code') }}">Seal code</a>
+    </div>
+    <div style="margin-top:1rem">
+    {% if mode == 'image' %}
+      <form method="post" enctype="multipart/form-data" data-busy="verify" data-busy-title="Verifying the image">
+        <input type="hidden" name="mode" value="image">
+        <label class="drop" style="font-weight:500;cursor:pointer;display:block"><input type="file" name="image" accept="image/png,image/jpeg,image/webp"><span class="hint" data-file>Drop the image you saw (PNG, JPG or WebP)</span></label>
+        <button class="btn primary" style="margin-top:.8rem">Verify image</button>
+      </form>
+      <div style="margin-top:1rem"><small><b>No image to hand? Try a sample:</b></small>
+        <form method="post" class="row" style="margin-top:.4rem" data-busy="verify" data-busy-title="Verifying the sample">
+          <input type="hidden" name="mode" value="image">
+          {% for key, (fname, label) in samples.items() %}<button class="btn small" name="sample" value="{{ key }}">{{ label }}</button>{% endfor %}
+        </form>
+        <div class="row" style="margin-top:.6rem">{% for key, (fname, label) in samples.items() %}<a href="{{ url_for('verify_sample', name=key) }}" download><img src="{{ url_for('verify_sample', name=key) }}" alt="{{ label }}" class="thumb" style="width:64px;height:64px" title="Download: {{ label }}"></a>{% endfor %}</div>
+      </div>
+    {% elif mode == 'code' %}
+      <form method="post" data-busy="verify" data-busy-title="Checking the seal">
+        <input type="hidden" name="mode" value="code">
+        <label for="code">Seal code</label>
+        <input type="text" id="code" name="code" value="{{ code }}" placeholder="VLM-XXXX-XXXX" maxlength="40" style="font-family:ui-monospace,monospace;letter-spacing:.05em;text-transform:uppercase" required>
+        <button class="btn primary" style="margin-top:.8rem">Check seal</button>
+      </form>
+    {% else %}
+      <form method="post" data-busy="verify" data-busy-title="Verifying the text">
+        <input type="hidden" name="mode" value="text">
+        <label for="vt">The text you saw</label>
+        <textarea id="vt" name="text" rows="6" maxlength="20000" placeholder="Paste a post, email, ad or web copy" required>{{ text }}</textarea>
+        <div class="row" style="margin-top:.8rem"><button class="btn primary">Verify text</button>
+          {% if sample_text %}<button type="button" class="btn small ghost" onclick="document.getElementById('vt').value={{ sample_text|tojson|forceescape }}">Fill an approved sample</button>
+          <button type="button" class="btn small ghost" onclick="document.getElementById('vt').value={{ sample_text.replace('₹499', '₹399')|tojson|forceescape }}">Fill an edited copy</button>{% endif %}</div>
+      </form>
+    {% endif %}
+    </div>
+  </section>
+
+  <section>
+  {% if result %}
+    {% set v = result.verdict %}
+    <div class="verdict {{ v }}">
+      {% if v in ('approved', 'approved_copy', 'excerpt') %}
+        <div class="seal-card"><div class="seal"><span><span class="big">✓</span>Approved</span></div>
+          <div><h2>{{ {'approved': 'Approved by ' ~ brand, 'approved_copy': 'Approved artwork (re-saved copy)', 'excerpt': 'An exact excerpt of approved content'}[v] }}</h2>
+            <small>{% if v == 'approved_copy' %}The file isn't byte-identical (it was probably re-saved or resized), but it looks the same and its text matches the approved version exactly.{% elif v == 'excerpt' %}This text appears word for word inside an approved piece.{% else %}This matches the approved version exactly, and the seal's signature checks out.{% endif %}</small></div></div>
+      {% elif v == 'outdated' %}
+        <div class="seal-card"><div class="seal outdated"><span><span class="big">↻</span>Outdated</span></div>
+          <div><h2>Approved once, but replaced</h2><small>This was approved, then a newer version replaced it (for example after a price change). Don't rely on it.</small></div></div>
+      {% elif v == 'modified' %}
+        <div class="seal-card"><div class="seal bad"><span><span class="big">≠</span>Modified</span></div>
+          <div><h2>Changed after approval</h2><small>{{ result.similarity }}% the same as an approved piece, but not identical. The differences are below.</small></div></div>
+      {% elif v == 'similar' %}
+        <div class="seal-card"><div class="seal outdated"><span><span class="big">?</span>Unsure</span></div>
+          <div><h2>Looks like approved artwork</h2><small>{{ result.reason }}</small></div></div>
+      {% elif v == 'tampered' %}
+        <div class="seal-card"><div class="seal bad"><span><span class="big">!</span>Invalid</span></div>
+          <div><h2>The seal's signature doesn't match</h2><small>The record was changed outside Canon. Treat this content as unverified.</small></div></div>
+      {% elif v == 'bad' %}
+        <h2>That file couldn't be read</h2><small>{{ result.reason }}</small>
+      {% elif v == 'empty' %}
+        <h2>Nothing to check</h2><small>Paste some text, choose an image or enter a seal code.</small>
+      {% else %}
+        <div class="seal-card"><div class="seal unknown"><span><span class="big">?</span>Unknown</span></div>
+          <div><h2>Not approved content</h2><small>{{ result.reason or 'Nothing approved by this brand matches.' }} It may be a draft, a fake, or heavily edited.</small></div></div>
+      {% endif %}
+
+      {% if result.seal %}
+      <div class="card" style="margin-top:1rem;box-shadow:none">
+        <div class="row spread"><b>{{ result.content.title }}</b><a class="code" style="font-size:.85rem" href="{{ url_for('seal_page', code=result.seal.code) }}">{{ result.seal.code }}</a></div>
+        <small>{{ result.content.channel }} · approved by {{ result.approver }} on {{ result.seal.issued_at[:10] }} · version {{ result.seal.version_n }}</small>
+        {% if v == 'modified' %}
+          <div class="fix" style="margin:.8rem 0 0"><span class="fix-label">Approved → what you {{ 'uploaded' if result.kind == 'image' else 'pasted' }}</span>{{ result.diff }}</div>
+        {% elif result.text %}
+          <div class="doc" style="font-size:.98rem;margin-top:.6rem">{{ result.text }}</div>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  {% else %}
+    <div class="card">
+      <h2>How it works</h2>
+      <ol style="padding-left:1.1rem;color:var(--ink-2)">
+        <li style="margin-bottom:.4rem">When a reviewer approves a piece, Canon signs it with HMAC-SHA256 over the exact text, the image file and the version.</li>
+        <li style="margin-bottom:.4rem">Whitespace and quote styles are ignored. Any other change, even one digit in a price, breaks the match.</li>
+        <li style="margin-bottom:.4rem">Images are matched by file hash, then by visual fingerprint; near matches have their text read and compared.</li>
+        <li>If a fact changes and the piece is updated, its old seal shows as outdated.</li>
+      </ol>
+    </div>
+  {% endif %}
+  </section>
+</div>
+{% endblock %}

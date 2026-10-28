@@ -36,7 +36,8 @@ class Flow(unittest.TestCase):
         for path in ("/", "/login", "/trust"):
             r = self.c.get(path)
             self.assertEqual(r.status_code, 200, path)
-        self.assertIn(b"Try it in three minutes", self.c.get("/").data)
+        self.assertIn(b"five-minute tour", self.c.get("/").data)
+        self.assertEqual(self.c.get("/verify").status_code, 200)  # public, no login
         self.assertEqual(self.c.get("/content").status_code, 302)  # login required
 
     def test_2_writer_checks_and_fixes_demo_draft(self):
@@ -79,7 +80,9 @@ class Flow(unittest.TestCase):
         left = {f["ref"] for f in q(self.db(), "SELECT ref FROM findings WHERE content_id=? AND status='open'", (cid,))}
         self.assertTrue(left <= {"R-11"}, left)
         r = self.c.post(f"/content/{cid}/status", data={"action": "submit"}, follow_redirects=True)
-        self.assertIn(b"Sent to the review queue", r.data)
+        # it talks about interest rates and investing, so it is routed to Legal
+        self.assertIn(b"Sent to Legal review", r.data)
+        self.assertEqual(q(self.db(), "SELECT lane FROM content WHERE id=?", (cid,), one=True)["lane"], "legal")
         hist = self.c.get(f"/content/{cid}/history")
         self.assertEqual(hist.status_code, 200)
         self.assertIn(b"Festive greeting", hist.data)
@@ -88,9 +91,14 @@ class Flow(unittest.TestCase):
         self.login("u-reviewer")
         db = self.db()
         cid = q(db, "SELECT id FROM content WHERE title='Diwali savings post'", one=True)["id"]
-        self.assertIn(b"Diwali savings post", self.c.get("/content").data)
+        self.assertIn(b"Diwali savings post", self.c.get("/queue").data)
+        # a marketing reviewer can't approve legal-lane content
         r = self.c.post(f"/content/{cid}/status", data={"action": "approve"}, follow_redirects=True)
-        self.assertIn(b"Approved", r.data)
+        self.assertIn(b"Only Legal or a brand admin can approve it", r.data)
+        self.login("u-legal")
+        r = self.c.post(f"/content/{cid}/status", data={"action": "approve"}, follow_redirects=True)
+        self.assertIn(b"Approved and sealed", r.data)
+        self.login("u-reviewer")
         self.assertEqual(q(self.db(), "SELECT status FROM content WHERE id=?", (cid,), one=True)["status"], "approved")
         links = q(self.db(), "SELECT fact_id FROM claim_links WHERE content_id=?", (cid,))
         self.assertIn("F-01", {l["fact_id"] for l in links})
@@ -113,12 +121,21 @@ class Flow(unittest.TestCase):
         impact = self.c.get(r.headers["Location"])
         text = impact.data.decode()
         n = int(re.search(r"(\d+) approved piece", text).group(1))
-        self.assertEqual(n, 7)  # 6 seeded Pro pieces + the Diwali post approved in test 3
+        self.assertEqual(n, 8)  # 6 seeded Pro text pieces + the Pro banner image + the Diwali post approved in test 3
         cids = re.findall(r'name="cid" value="(\d+)"', text)
         r = self.c.post(r.headers["Location"], data={"cid": cids}, follow_redirects=True)
         self.assertIn(b"sent to the review queue", r.data)
         db = self.db()
+        banner = q(db, "SELECT id FROM content WHERE title='Pro plan banner'", one=True)["id"]
+        self.assertIn(str(banner), cids)
+        # artwork can't be fixed automatically: it goes back to its author with instructions
+        self.assertEqual(q(db, "SELECT status FROM content WHERE id=?", (banner,), one=True)["status"], "changes_requested")
+        self.assertIn("upload updated artwork", q(db, "SELECT body FROM comments WHERE content_id=? ORDER BY id DESC",
+                                                  (banner,), one=True)["body"])
+        # every old seal for these pieces now shows as outdated
         for cid in cids:
+            self.assertIsNone(q(db, "SELECT 1 FROM seals WHERE content_id=? AND status='valid'", (cid,), one=True))
+        for cid in [c for c in cids if c != str(banner)]:
             body = q(db, "SELECT body FROM versions WHERE content_id=? ORDER BY n DESC LIMIT 1", (cid,), one=True)["body"]
             self.assertIn("₹549", body)
             self.assertNotIn("₹499", body)

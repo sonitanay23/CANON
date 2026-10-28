@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Agency briefs{% endblock %}
+{% block body %}
+<div class="page-head">
+  <div><div class="eyebrow">Agency partners</div><h1>Briefs to BrightLeaf Studio</h1>
+    <p>Send work to your agency. They see the brief, the brand kit and only partner-visible facts in their own workspace, and every draft they make is checked before it reaches review.</p></div>
+  {% if me.role == 'admin' %}<a class="btn" href="{{ url_for('partner') }}">Preview their workspace</a>{% endif %}
+</div>
+<div class="grid review" style="align-items:start">
+  <section class="card">
+    <h2>All briefs</h2>
+    {% for b in briefs %}
+    <div class="brief">
+      <div class="row spread"><b>{{ b.title }}</b>
+        <div class="row">{% if b.due_on %}<span class="due {{ 'soon' if b.due_on <= today and b.status == 'open' }}">Due {{ b.due_on }}</span>{% endif %}
+          <span class="badge {{ 'ok' if b.status == 'done' else 'accent' }}">{{ 'Delivered' if b.status == 'done' else 'Open' }}</span></div></div>
+      <p style="margin:.35rem 0 .5rem;color:var(--ink-2);font-size:.92rem">{{ b.body }}</p>
+      <div class="row spread"><small>{{ b.channel }} · {{ b.drafts }} draft{{ 's' if b.drafts != 1 }} so far</small>
+        {% if me.role == 'admin' %}<form method="post" action="{{ url_for('brief_done', bid=b.id) }}"><button class="btn small ghost">{{ 'Mark delivered' if b.status == 'open' else 'Reopen' }}</button></form>{% endif %}</div>
+    </div>
+    {% else %}<div class="empty"><small>No briefs yet.</small></div>{% endfor %}
+  </section>
+  <section class="card soft">
+    <h2>New brief</h2>
+    {% if me.role == 'admin' %}
+    <form method="post">
+      <div class="field"><label for="bt">Title</label><input type="text" id="bt" name="title" maxlength="120" required placeholder="e.g. Velora Plus launch reel captions"></div>
+      <div class="field"><label for="bb">What you need</label><textarea id="bb" name="body" rows="5" maxlength="2000" required placeholder="Audience, key message, facts to use, things to avoid"></textarea></div>
+      <div class="grid g2" style="margin-top:.9rem">
+        <div><label for="bc">Channel</label><select id="bc" name="channel">{% for ch in channels %}<option>{{ ch }}</option>{% endfor %}</select></div>
+        <div><label for="bd">Due</label><input type="date" id="bd" name="due_on"></div>
+      </div>
+      <button class="btn primary" style="margin-top:1rem">Send to agency</button>
+    </form>
+    {% else %}<p class="muted">Brand admins send briefs. Reviewers can see them here.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}

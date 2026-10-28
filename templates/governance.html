@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Governance insights{% endblock %}
+{% block body %}
+<div class="page-head">
+  <div><div class="eyebrow">Governance insights</div><h1>What keeps going wrong, and is it getting better?</h1>
+    <p>Recurring issues, how often writers accept Canon's suggestions, how fast each review lane moves, and how accurate Canon is on its test set.</p></div>
+  <div class="tabs"><a class="on" href="{{ url_for('governance') }}">Trends</a><a href="{{ url_for('insights') }}">Rule debugger{% if unclear %} <span class="badge high" style="margin-left:.2rem">{{ unclear }}</span>{% endif %}</a></div>
+</div>
+
+<div class="grid g4" style="margin-bottom:1rem">
+  <div class="card stat c1 reveal" style="--d:0"><div class="n" data-count="{{ kpi.pieces }}">{{ kpi.pieces }}</div><div class="l">pieces checked in 9 weeks</div></div>
+  <div class="card stat c2 reveal" style="--d:1"><div class="n" data-count="{{ kpi.issues }}">{{ kpi.issues }}</div><div class="l">issues caught before publishing</div></div>
+  <div class="card stat c4 reveal" style="--d:2"><div class="n" {% if kpi.acceptance is not none %}data-count="{{ kpi.acceptance }}" data-suffix="%"{% endif %}>{{ kpi.acceptance if kpi.acceptance is not none else '–' }}{{ '%' if kpi.acceptance is not none }}</div><div class="l">of decided suggestions accepted</div></div>
+  <div class="card stat c3 reveal" style="--d:3"><div class="n" data-count="{{ kpi.fast_share }}" data-suffix="%">{{ kpi.fast_share }}%</div><div class="l">of approvals went through the fast lane</div></div>
+</div>
+
+<div class="grid g2">
+  <div class="card reveal"><div class="card-head"><h2>Issues per week, by kind</h2></div>{{ figs.cat }}{{ figs.cat_legend }}</div>
+  <div class="card reveal"><div class="card-head"><h2>Suggestions accepted, per week</h2></div>{{ figs.acc }}
+    <p class="legend-note">A practical precision signal: when writers keep rejecting suggestions, Canon (or the rule) is probably wrong.</p></div>
+  <div class="card reveal"><div class="card-head"><h2>Most recurring issues</h2><a class="btn small" href="{{ url_for('insights') }}">Debug unclear rules →</a></div>{{ figs.top }}</div>
+  <div class="card reveal"><div class="card-head"><h2>Issues per checked piece</h2></div>{{ figs.per }}
+    <p class="legend-note">Falling means writers are getting it right first time more often.</p></div>
+  <div class="card reveal"><div class="card-head"><h2>Review lanes: median hours to approval</h2></div>{{ figs.lane }}
+    <div class="row" style="margin-top:.5rem">{% for l in data.lanes %}<span class="badge {{ l.lane }}">{{ l.label }}: {{ l.n }} approved</span>{% endfor %}</div></div>
+  <div class="card reveal"><div class="card-head"><h2>Issues by team</h2></div>
+    {% set mx = (data.teams|map(attribute='n')|max) if data.teams else 1 %}
+    {% for t in data.teams %}<div style="margin:.55rem 0"><div class="row spread"><small>{{ t.team }}</small><b>{{ t.n }}</b></div><div class="meter"><span style="width:{{ (t.n / mx * 100)|round|int }}%"></span></div></div>{% else %}<small>No data yet.</small>{% endfor %}
+  </div>
+</div>
+
+<div class="card reveal" style="margin-top:1rem">
+  <div class="card-head"><h2>Accuracy over time (reliability test set)</h2><a class="btn small" href="{{ url_for('reliability') }}">Run the test set →</a></div>
+  {{ figs.rel }}{{ figs.rel_legend }}
+  <p class="legend-note">The four 22 Oct points are the runs measured in Round 2 and reported in the README. Each new run on the Reliability page is added here.</p>
+</div>
+
+<p class="hint" style="margin-top:1rem"><b>About this data:</b> weeks before the demo was loaded contain generated sample activity for the fictional brand, so the charts have a shape to show. Everything you do in the demo (checks, decisions, approvals) is added live, and the reliability points are real measurements.</p>
+{% endblock %}

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Partner workspace{% endblock %}
+{% block body %}
+<div class="partner-hero reveal">
+  <div class="eyebrow" style="color:#7fe0b4">Partner workspace</div>
+  <h1>{{ team.replace(' (agency)', '') }} × {{ brand }}</h1>
+  <p>Briefs from {{ brand }}, your drafts with live brand checks, reviewer feedback, and the brand kit, in one place. {% if me.role == 'admin' %}<b>You're viewing this as a brand admin (preview).</b>{% endif %}</p>
+  <div class="stats">
+    <div><b data-count="{{ stats.briefs }}">{{ stats.briefs }}</b><span>open briefs</span></div>
+    <div><b data-count="{{ stats.in_review }}">{{ stats.in_review }}</b><span>in review</span></div>
+    <div><b data-count="{{ stats.approved }}">{{ stats.approved }}</b><span>approved and sealed</span></div>
+    <div><b data-count="{{ stats.fixed }}">{{ stats.fixed }}</b><span>issues fixed before review</span></div>
+  </div>
+</div>
+
+<div class="grid review" style="align-items:start">
+  <section class="stack">
+    <div class="card reveal">
+      <div class="card-head"><h2>Briefs</h2><small>What {{ brand }} has asked you to make</small></div>
+      {% for b in briefs %}
+      <div class="brief">
+        <div class="row spread"><b>{{ b.title }}</b>
+          {% if b.status == 'done' %}<span class="badge ok">Delivered</span>
+          {% elif b.due_on %}<span class="due {{ 'soon' if b.due_on <= today }}">Due {{ b.due_on }}{{ ' · overdue' if b.due_on < today }}</span>{% endif %}</div>
+        <p style="margin:.35rem 0 .6rem;color:var(--ink-2);font-size:.92rem">{{ b.body }}</p>
+        <div class="row spread"><small>{{ b.channel }} · {{ b.drafts }} draft{{ 's' if b.drafts != 1 }}</small>
+          {% if b.status == 'open' and me.role == 'agency' %}<a class="btn small primary" href="{{ url_for('content_new', brief=b.id) }}">Start a draft</a>{% endif %}</div>
+      </div>
+      {% else %}<div class="empty"><small>No briefs yet.</small></div>{% endfor %}
+    </div>
+
+    <div class="card reveal">
+      <div class="card-head"><h2>Your work</h2><small>Checked against the brand before it reaches a reviewer</small></div>
+      {% for w in work %}
+      <div class="item" style="align-items:flex-start">
+        <div style="min-width:0">
+          <a class="item-title" href="{{ url_for('content_view', cid=w.id) }}">{{ w.title }}</a>
+          <div><small>{{ w.channel }} · updated {{ w.updated_at[:10] }}</small></div>
+          {% if w.feedback %}<div style="margin-top:.3rem;font-size:.88rem"><b>Reviewer:</b> “{{ w.feedback }}”</div>{% endif %}
+          {% if w.seal %}<div style="margin-top:.3rem"><a class="code" style="font-size:.8rem" href="{{ url_for('seal_page', code=w.seal) }}">{{ w.seal }}</a></div>{% endif %}
+        </div>
+        <div style="text-align:right">
+          <span class="badge {{ w.status }}">{{ status_labels[w.status] }}</span>
+          {% if w.open_issues %}<div style="margin-top:.3rem"><span class="badge medium">{{ w.open_issues }} open</span></div>{% endif %}
+        </div>
+      </div>
+      {% else %}<div class="empty"><small>Nothing yet. Start from a brief above.</small></div>{% endfor %}
+    </div>
+  </section>
+
+  <section class="stack">
+    <div class="card reveal">
+      <h2>Brand kit</h2>
+      <p class="doc" style="font-size:.98rem;line-height:1.7">{{ voice }}</p>
+      <h3 style="margin-top:1rem">Logos</h3>
+      <div class="grid g2">
+        {% for lg in logos %}
+        <div class="logo-tile {{ lg.status }}"><img src="{{ url_for('logo_file', lid=lg.id) }}" alt="{{ lg.name }}"><div><small>{{ lg.name }}</small></div>
+          {% if lg.status == 'current' %}<a class="btn small" href="{{ url_for('logo_file', lid=lg.id) }}" download>Download</a>{% endif %}</div>
+        {% endfor %}
+      </div>
+      <p class="hint">Canon flags the retired logo automatically if it appears in an image.</p>
+    </div>
+    <div class="card reveal">
+      <h2>Facts you can use</h2>
+      {% for f in facts %}
+      <div class="item"><div><span class="chip">{{ f.id }}</span> <small>{{ f.label }}</small>{% if f.expires_on and f.expires_on < today %} <span class="badge high">Expired</span>{% endif %}</div><b style="font-family:var(--proof)">{{ f.value }}</b></div>
+      {% endfor %}
+      <p class="flash info" style="margin:.8rem 0 0">{{ hidden }} internal fact{{ 's are' if hidden != 1 else ' is' }} not shared with partners. Your drafts are never checked against them, and they're never sent to the AI for your work.</p>
+    </div>
+    <div class="card reveal">
+      <h2>Rules Canon checks</h2>
+      {% for r in rules %}<div style="padding:.25rem 0"><span class="chip">{{ r.id }}</span> <small><b>{{ r.title }}</b></small></div>{% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

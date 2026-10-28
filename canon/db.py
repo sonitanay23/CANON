@@ -69,6 +69,22 @@ CREATE TABLE IF NOT EXISTS audit_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, action TEXT,
   detail TEXT, created_at TEXT
 );
+CREATE TABLE IF NOT EXISTS assets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, content_id INTEGER, n INTEGER, filename TEXT, mime TEXT,
+  data BLOB, sha TEXT, phash TEXT, width INTEGER, height INTEGER, alt_text TEXT,
+  ocr_text TEXT, ocr_method TEXT, ocr_lines TEXT, visual_json TEXT, created_by TEXT, created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS logos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, status TEXT, mime TEXT, data BLOB, created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS seals (
+  code TEXT PRIMARY KEY, content_id INTEGER, version_n INTEGER, text_sha TEXT, image_sha TEXT,
+  image_phash TEXT, signature TEXT, issued_by TEXT, issued_at TEXT, status TEXT DEFAULT 'valid'
+);
+CREATE TABLE IF NOT EXISTS briefs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, body TEXT, channel TEXT, team TEXT,
+  due_on TEXT, created_by TEXT, created_at TEXT, status TEXT DEFAULT 'open'
+);
 CREATE TABLE IF NOT EXISTS reliability_runs (
   id INTEGER PRIMARY KEY AUTOINCREMENT, status TEXT, progress INTEGER,
   total INTEGER, with_ai INTEGER, results_json TEXT, summary_json TEXT,
@@ -101,8 +117,21 @@ def close_db(_exc=None):
         db.close()
 
 
+# columns added after Round 2; older local databases get them on start
+MIGRATIONS = [
+    ("content", "lane", "TEXT"), ("content", "risk", "INTEGER"), ("content", "risk_reasons", "TEXT"),
+    ("content", "assignee_id", "TEXT"), ("content", "brief_id", "INTEGER"), ("content", "submitted_at", "TEXT"),
+    ("content", "approved_at", "TEXT"),
+    ("findings", "target", "TEXT DEFAULT 'text'"), ("findings", "box", "TEXT"),
+]
+
+
 def init_db(conn):
     conn.executescript(SCHEMA)
+    for table, col, kind in MIGRATIONS:
+        cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if col not in cols:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {kind}")
     conn.commit()
 
 

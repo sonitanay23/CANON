@@ -1,63 +1,77 @@
 {% extends "base.html" %}
 {% block title %}Brand checks before you publish{% endblock %}
 {% block body %}
+<div class="hero-wrap">
 <section class="hero">
   <div>
-    <h1>Catch brand mistakes before your customers do.</h1>
-    <p class="lede">Canon reads every draft against your approved rules and facts, marks each problem with the exact rule behind it, and suggests the smallest fix that keeps what the writer meant. People make every final call.</p>
-    <div class="row" style="margin-top:1.4rem">
-      <a class="btn primary" href="{{ url_for('login') }}">Try the demo</a>
-      <a class="btn" href="{{ url_for('trust') }}">How Canon uses AI</a>
+    <div class="kicker-pill"><b>Round 3</b> Images, signed approvals and risk-based review</div>
+    <h1>Catch brand mistakes <span class="grad-text">before your customers do.</span></h1>
+    <p class="lede">Canon reads every draft and every image against your approved rules and facts, marks each problem with the exact rule behind it, and suggests the smallest fix that keeps what the writer meant. People make every final call, and every approval gets a seal anyone can verify.</p>
+    <div class="row" style="margin-top:1.6rem">
+      <a class="btn primary big" href="#accounts">Try the demo</a>
+      <a class="btn light big" href="{{ url_for('verify') }}">Verify a piece of content</a>
     </div>
-    <p class="hint" style="margin-top:1rem">No sign-up. Pick a demo account and you're in.</p>
+    <div class="hero-stats">
+      <div><b data-count="{{ stats.rules }}">{{ stats.rules }}</b>active brand rules</div>
+      <div><b data-count="{{ stats.facts }}">{{ stats.facts }}</b>approved facts</div>
+      <div><b data-count="{{ stats.seals }}">{{ stats.seals }}</b>sealed approvals</div>
+    </div>
   </div>
 
   <div class="proof-demo" aria-label="Example of a draft marked up by Canon">
     <div class="sheet">
-      <div class="proof-meta">Diwali savings post, Instagram. 3 of 12 issues shown.</div>
-      <div class="doc">Diwali just got brighter! Velora Money is <mark class="high">the best in India</mark><sup>1</sup> for savings. Our Velora Pro plan is now just <mark class="high">₹399</mark><sup>2</sup> a month. <mark class="medium">Act now, this offer won't last!</mark><sup>3</sup></div>
+      <div class="proof-meta"><span>Diwali savings post · Instagram</span><span>3 of 12 issues shown</span></div>
+      <div class="doc">Diwali just got brighter. Velora Money is <mark class="high" style="--i:1">the best in India</mark><sup>1</sup> for savings. Our Velora Pro plan is now just <mark class="high" style="--i:3">₹399</mark><sup>2</sup> a month. <mark class="medium" style="--i:5">Act now, this offer won't last</mark><sup>3</sup>.</div>
     </div>
     <div class="margin">
-      <div class="note n1"><span class="num">1</span><b>Unproven superlative</b><span class="muted">R-03, rule engine</span><div class="fixline"><del>the best in India</del> <ins>trusted</ins></div></div>
-      <div class="note n2"><span class="num">2</span><b>Wrong price</b><span class="muted">F-01 says ₹499 (pricing sheet, Q4 2026)</span><div class="fixline"><del>₹399</del> <ins>₹499</ins></div></div>
-      <div class="note n3"><span class="num">3</span><b>Pressure tactic</b><span class="muted">R-12, found by AI review</span><div class="fixline"><del>Act now, this offer won't last</del> <ins>The offer runs until Sunday</ins></div></div>
+      <div class="note n1"><span class="num">1</span><b>Unproven superlative</b><span class="muted">R-03 · rule engine</span><div class="fixline"><del>the best in India</del> <ins>trusted</ins></div></div>
+      <div class="note n2"><span class="num">2</span><b>Wrong price</b><span class="muted">F-01 says ₹499 · pricing sheet</span><div class="fixline"><del>₹399</del> <ins>₹499</ins></div></div>
+      <div class="note n3"><span class="num">3</span><b>Pressure tactic</b><span class="muted">R-12 · AI review</span><div class="fixline"><del>Act now, this offer won't last</del> <ins>The offer runs until Sunday</ins></div></div>
     </div>
+    <div class="stamp" aria-hidden="true"><span>Approved<small>VLM-sealed</small></span></div>
+  </div>
+</section>
+</div>
+
+<section class="section">
+  <div class="section-head reveal"><div class="eyebrow" style="justify-content:center">What Canon does</div><h2>One gate between a draft and your customers</h2>
+    <p>Text, PDFs and images go through the same rules. Every flag cites its source, every fix is minimal, and every decision is logged.</p></div>
+  <div class="features">
+    <div class="feature lift reveal" style="--d:0"><div class="ico">✎</div><span class="tag">Check</span><h3>Rules, facts and voice</h3><p>Banned claims, preferred terms, required disclaimers and wrong numbers are caught by exact rules. Tone and unsupported claims are reviewed by AI, and each AI finding is validated.</p></div>
+    <div class="feature t2 lift reveal new" style="--d:1"><div class="ico">◩</div><span class="tag">See</span><h3>Images and accessibility</h3><p>Canon reads the text inside images and runs it through the same checks, measures WCAG contrast, catches retired logos, and makes sure there's alt text.</p></div>
+    <div class="feature t3 lift reveal new" style="--d:2"><div class="ico">⇶</div><span class="tag">Route</span><h3>Risk-based review</h3><p>Low-risk pieces take a fast lane. Anything that makes financial claims goes to Legal. Every routing decision lists its reasons.</p></div>
+    <div class="feature lift reveal" style="--d:3"><div class="ico">↻</div><span class="tag">Keep current</span><h3>Living fact ledger</h3><p>Change a price and Canon finds every approved piece that still uses the old one, drafts the update, and sends it back to review.</p></div>
+    <div class="feature t2 lift reveal new" style="--d:4"><div class="ico">✓</div><span class="tag">Prove</span><h3>Signed approval seals</h3><p>Every approval is signed. Anyone can paste text, upload an image or enter a seal code to see if it's approved, outdated, or modified, with the exact changes.</p></div>
+    <div class="feature t3 lift reveal new" style="--d:5"><div class="ico">⌂</div><span class="tag">Partner</span><h3>Agency workspace</h3><p>Agencies get briefs, a brand kit, live checks and reviewer feedback in one place, and never see internal facts.</p></div>
   </div>
 </section>
 
-<section class="how">
-  <div>
-    <h2>Try it in three minutes</h2>
-    <p class="muted">Each step uses a different demo account, so you see Canon from the writer's, reviewer's and brand team's side.</p>
+<section class="section">
+  <div class="section-head reveal"><div class="eyebrow" style="justify-content:center">The five-minute tour</div><h2>See it from every side of the desk</h2>
+    <p>Each step uses a different demo account. No passwords.</p></div>
+  <div class="journey">
+    <div class="reveal lift" style="--d:0"><span class="who-tag">Riya · writer</span><b>Check a draft and a banner</b><p>Open <i>Diwali savings post</i> or <i>Diwali banner</i> and press Check. Click any mark to see the rule and the fix.</p></div>
+    <div class="reveal lift" style="--d:1"><span class="who-tag">Riya · writer</span><b>Decide and submit</b><p>Accept, edit or keep each fix with a reason. Submit, and Canon scores the risk and picks a review lane.</p></div>
+    <div class="reveal lift" style="--d:2"><span class="who-tag">Kabir / Meera · reviewers</span><b>Review by lane</b><p>The queue sorts work by risk. Claims go to Meera in Legal; clean pieces can be approved in one click.</p></div>
+    <div class="reveal lift" style="--d:3"><span class="who-tag">Anyone</span><b>Verify what was published</b><p>Paste text or upload an image on the Verify page. Canon says if it's approved, outdated, or edited after approval.</p></div>
   </div>
-  <ol class="steps">
-    <li><b>Check a draft as Riya, a writer</b><span>Open <i>Diwali savings post</i> and press Check. Click any marked phrase to see why it was flagged and the fix Canon suggests.</span></li>
-    <li><b>Decide on each issue</b><span>Accept a fix, edit it, or keep your words and say why. Then submit the draft for review.</span></li>
-    <li><b>Change a fact as Ananya, the brand admin</b><span>In Brand rules &amp; facts, change the Velora Pro price. Canon lists every approved piece that still says the old price and drafts the update for each.</span></li>
-  </ol>
 </section>
 
-<section class="ideas">
-  <div><span class="tag">When facts change</span><h3>Living fact ledger</h3><p>Every price, number and claim has an owner, a source and an expiry. Change one and Canon finds the published content that quietly went out of date.</p></div>
-  <div><span class="tag">When rules don't work</span><h3>Guideline debugger</h3><p>If reviewers keep overriding a rule, the rule is probably unclear. Canon shows the reasons people gave and helps the brand team rewrite it.</p></div>
-  <div><span class="tag">When a fix is needed</span><h3>Intent-first fixes</h3><p>Canon says what the writer meant, then changes only the flagged words. Nothing is applied until someone clicks.</p></div>
-</section>
-
-<section id="accounts">
-  <div class="card-head"><div><h2>Pick a demo account</h2><small>No password. Each account sees only what its role allows.</small></div>
+<section id="accounts" class="section">
+  <div class="card-head reveal"><div><h2 style="font-size:1.5rem">Pick a demo account</h2><small>No password. Each account sees only what its role allows.</small></div>
     {% if me and me.role == 'admin' %}
     <form method="post" action="{{ url_for('reset_demo') }}" onsubmit="return confirm('Reset all demo data to its starting state?')"><button class="btn small danger">Reset demo data</button></form>
     {% endif %}
   </div>
   <form method="post" action="{{ url_for('login') }}" class="accounts">
-    {% set what = {'creator': 'Writes and checks drafts', 'reviewer': 'Reviews and approves', 'admin': 'Owns rules and facts', 'agency': 'Outside partner, internal facts hidden'} %}
+    {% set what = {'creator': 'Writes and checks drafts and images', 'admin': 'Owns rules, facts and logos', 'agency': 'Outside partner: briefs, brand kit, internal facts hidden'} %}
     {% for u in users %}
-    <button class="account" name="uid" value="{{ u.id }}">
-      <span class="avatar">{{ u.name.split()[0][0] }}{{ u.name.split()[-1][0] }}</span>
-      <span><b>{{ u.name }}, {{ role_labels[u.role]|lower }}</b><small class="muted">{{ what[u.role] }}. {{ u.team }}.</small></span>
+    <button class="account reveal" style="--d:{{ loop.index0 }}" name="uid" value="{{ u.id }}">
+      {{ avatar(u) }}
+      <span><b>{{ u.name }}</b><small class="muted">{{ role_label(u) }}. {{ what.get(u.role) or ('Reviews claims, disclaimers and financial copy' if (u.team or '').startswith('Legal') else 'Reviews by risk lane, approves and seals') }}.</small></span>
     </button>
     {% endfor %}
   </form>
-  <p class="hint" style="margin-top:1rem">{{ stats.rules }} active rules and {{ stats.facts }} approved facts in the demo brand, {{ stats.approved }} approved pieces watched for fact changes.</p>
+  <p class="hint" style="margin-top:1rem">{{ stats.rules }} active rules and {{ stats.facts }} approved facts in the demo brand. {{ stats.approved }} approved pieces are watched for fact changes.</p>
 </section>
 {% endblock %}

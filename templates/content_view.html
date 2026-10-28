@@ -3,49 +3,78 @@
 {% block body %}
 {% set is_author = me.id == c.author_id %}
 {% set can_act = c.status != 'approved' and (is_author or me.role in ('admin','reviewer')) %}
+{% set can_edit = c.status != 'approved' and (is_author or me.role == 'admin') %}
 {% set nums = {} %}{% for f in findings %}{% set _ = nums.update({f.id: loop.index}) %}{% endfor %}
 {% set high = findings|selectattr('severity','equalto','high')|list|length %}
 
 <div class="page-head">
   <div>
-    <div class="eyebrow">{{ c.channel }}, by {{ c.author_name }}{% if c.author_role == 'agency' %} ({{ c.author_team }}){% endif %}</div>
+    <div class="eyebrow">{{ c.channel }} · by {{ c.author_name }}{% if c.author_role == 'agency' %} ({{ c.author_team }}){% endif %}</div>
     <h1>{{ c.title }}</h1>
-    <div class="row"><span class="badge {{ c.status }}">{{ status_labels[c.status] }}</span><small>Version {{ v.n }}, saved {{ v.created_at[:16] }} UTC</small>
-      <a href="{{ url_for('content_history', cid=c.id) }}"><small>History and decisions</small></a></div>
+    <div class="row"><span class="badge {{ c.status }}"><span class="dotx"></span>{{ status_labels[c.status] }}</span>
+      {% if c.lane and c.status in ('in_review','approved') %}<span class="badge {{ c.lane }}">{{ lanes[c.lane].label }}</span>{% endif %}
+      <small>Version {{ v.n }}{% if asset %} · image v{{ asset.n }}{% endif %} · saved {{ v.created_at[:16] }} UTC</small>
+      <a href="{{ url_for('content_history', cid=c.id) }}"><small>History and decisions</small></a>
+      {% if brief %}<small>· from brief <b>{{ brief.title }}</b></small>{% endif %}</div>
   </div>
   <div class="row">
     {% if can_act %}
-      <form method="post" action="{{ url_for('content_check', cid=c.id) }}"><button class="btn {{ 'primary' if stale or not run }}">{{ 'Check' if not run else 'Check again' }}</button></form>
+      <form method="post" action="{{ url_for('content_check', cid=c.id) }}" data-busy="check" data-busy-title="Checking {{ c.title }}"><button class="btn {{ 'primary' if stale or not run }}">{{ 'Check' if not run else 'Check again' }}</button></form>
     {% endif %}
     {% if is_author and c.status in ('draft','changes_requested') %}
       <form method="post" action="{{ url_for('content_status', cid=c.id) }}"><input type="hidden" name="action" value="submit">
         <button class="btn {{ 'primary' if run and not stale and not findings }}">Submit for review</button></form>
     {% endif %}
-    {% if me.role in ('admin','reviewer') and c.status == 'in_review' %}
+    {% if can_approve and c.status == 'in_review' %}
       <form method="post" action="{{ url_for('content_status', cid=c.id) }}"><input type="hidden" name="action" value="approve">
-        {% if high %}<input type="hidden" name="confirm" value="">{% endif %}
-        <button class="btn primary">Approve</button></form>
+        <button class="btn primary">Approve and seal</button></form>
     {% endif %}
   </div>
 </div>
 
 {% if me.role in ('admin','reviewer') and c.status == 'in_review' %}
-<div class="card" style="margin-bottom:1rem">
-  <div class="row spread">
-    <div><b>Reviewer decision</b><br><small>{% if high %}{{ high }} high-severity issue{{ 's' if high != 1 }} still open. Canon will ask you to confirm before approving.{% elif findings %}{{ findings|length }} open issue{{ 's' if findings|length != 1 }}, none high-severity.{% else %}All issues are resolved. Ready to approve.{% endif %}</small></div>
-    <details><summary>Send back with a note</summary>
-      <form method="post" action="{{ url_for('content_status', cid=c.id) }}" style="margin-top:.5rem;min-width:280px">
-        <input type="hidden" name="action" value="request_changes">
-        <textarea name="note" rows="3" placeholder="What should the writer change?"></textarea>
-        <button class="btn small" style="margin-top:.4rem">Request changes</button>
-      </form></details>
+<div class="card soft" style="margin-bottom:1rem">
+  <div class="grid g2" style="align-items:start">
+    <div>
+      <div class="row"><b>Routing</b><span class="badge {{ c.lane }}">{{ lanes[c.lane].label if c.lane else 'Not routed' }}</span>
+        <span class="risk">Risk {{ c.risk or 0 }}/20 <span class="bar"><span style="width:{{ ((c.risk or 0) / 20 * 100)|round|int }}%"></span></span></span></div>
+      <small>{% if assignee %}Assigned to {{ assignee.name }} ({{ role_label(assignee) }}). {% endif %}Target: within {{ lanes[c.lane].sla_hours if c.lane else 24 }} hours.</small>
+      {% if risk_reasons %}<ul class="reasons">{% for pts, why in risk_reasons %}<li>{{ why }}{% if pts %} <b>+{{ pts }}</b>{% endif %}</li>{% endfor %}</ul>{% endif %}
+    </div>
+    <div>
+      <b>Reviewer decision</b><br>
+      <small>{% if not can_approve %}This piece makes financial claims, so it was routed to Legal. You can comment or send it back; Legal approves it.
+        {% elif high %}{{ high }} high-severity issue{{ 's' if high != 1 }} still open. Canon will ask you to confirm before approving.
+        {% elif findings %}{{ findings|length }} open issue{{ 's' if findings|length != 1 }}, none high-severity.{% else %}All issues are resolved. Ready to approve.{% endif %}</small>
+      <details style="margin-top:.4rem"><summary>Send back with a note</summary>
+        <form method="post" action="{{ url_for('content_status', cid=c.id) }}" style="margin-top:.5rem">
+          <input type="hidden" name="action" value="request_changes">
+          <textarea name="note" rows="3" maxlength="2000" placeholder="What should the writer change?"></textarea>
+          <button class="btn small" style="margin-top:.4rem">Request changes</button>
+        </form></details>
+      {% if high and can_approve %}
+      <form method="post" action="{{ url_for('content_status', cid=c.id) }}" style="margin-top:.5rem">
+        <input type="hidden" name="action" value="approve"><input type="hidden" name="confirm" value="1">
+        <button class="btn small danger">Approve anyway (decision is logged)</button>
+      </form>
+      {% endif %}
+    </div>
   </div>
-  {% if high %}
-  <form method="post" action="{{ url_for('content_status', cid=c.id) }}" style="margin-top:.6rem">
-    <input type="hidden" name="action" value="approve"><input type="hidden" name="confirm" value="1">
-    <button class="btn small danger">Approve anyway (decision is logged)</button>
-  </form>
-  {% endif %}
+</div>
+{% endif %}
+
+{% if seal and c.status == 'approved' %}
+<div class="card" style="margin-bottom:1rem">
+  <div class="seal-card">
+    <div class="seal {{ '' if seal.status == 'valid' else 'outdated' }}"><span><span class="big">✓</span>{{ 'Sealed' if seal.status == 'valid' else 'Outdated' }}</span></div>
+    <div style="flex:1;min-width:0">
+      <b>Approved and sealed</b> <small>· {{ seal.issued_at[:16] }} UTC</small>
+      <div class="row" style="margin-top:.4rem"><span class="code">{{ seal.code }}</span>
+        <button type="button" class="btn small" data-copy="{{ seal.code }}">Copy code</button>
+        <a class="btn small" href="{{ url_for('seal_page', code=seal.code) }}">Public seal page</a></div>
+      <small>Anyone can check this piece on the <a href="{{ url_for('verify') }}">Verify</a> page. If one character changes, it shows as modified. Embed the live badge: <img src="{{ url_for('seal_badge', code=seal.code) }}" alt="Canon seal badge" style="height:20px;vertical-align:middle"></small>
+    </div>
+  </div>
 </div>
 {% endif %}
 
@@ -53,14 +82,16 @@
   <section class="stack sticky">
     <div class="sheet">
       <div class="card-head">
-        <h2>Draft</h2>
-        {% if findings %}<small>Click a highlight to jump to its issue</small>{% endif %}
+        <h2>{{ 'Caption' if asset else 'Draft' }}</h2>
+        {% if findings %}<small>Click a mark to jump to its issue</small>{% endif %}
       </div>
-      <div class="doc">{% for text, f in segs %}{% if f %}<a class="mk" href="#f{{ f.id }}"><mark class="{{ f.severity }}" title="{{ f.issue }}">{{ text }}</mark><sup>{{ nums[f.id] }}</sup></a>{% else %}{{ text }}{% endif %}{% endfor %}</div>
-      {% if can_act and (is_author or me.role == 'admin') %}
+      {% if v.body %}
+      <div class="doc">{% set k = namespace(i=0) %}{% for text, f in segs %}{% if f %}{% set k.i = k.i + 1 %}<a class="mk" href="#f{{ f.id }}"><mark class="{{ f.severity }}" style="--i:{{ k.i }}" title="{{ f.issue }}">{{ text }}</mark><sup>{{ nums[f.id] }}</sup></a>{% else %}{{ text }}{% endif %}{% endfor %}</div>
+      {% else %}<p class="muted"><i>No text. This piece is image only.</i></p>{% endif %}
+      {% if can_edit %}
       <details style="margin-top:1rem"><summary>Edit the text yourself</summary>
-        <form method="post" action="{{ url_for('content_edit', cid=c.id) }}" style="margin-top:.6rem">
-          <textarea name="body" rows="8">{{ v.body }}</textarea>
+        <form method="post" action="{{ url_for('content_edit', cid=c.id) }}" style="margin-top:.6rem" data-busy="check" data-busy-title="Saving and re-checking">
+          <textarea name="body" rows="8" maxlength="20000">{{ v.body }}</textarea>
           <div class="row" style="margin-top:.5rem"><button class="btn small primary">Save as new version and re-check</button></div>
         </form>
       </details>
@@ -68,13 +99,46 @@
       {% if c.status == 'approved' %}<p class="hint" style="margin-top:1rem">Approved content is locked. Canon watches the facts it uses and flags it if any of them change.</p>{% endif %}
     </div>
 
+    {% if asset %}
+    <div class="card" id="image">
+      <div class="card-head"><h2>Image</h2><span class="badge visual">{{ asset.width }}×{{ asset.height }}</span></div>
+      <div class="art">
+        <img src="{{ url_for('asset_file', aid=asset.id) }}" alt="{{ asset.alt_text }}">
+        {% for b in boxes %}<a class="box {{ b.sev }}" href="#f{{ b.id }}" style="left:{{ b.left }}%;top:{{ b.top }}%;width:{{ b.w }}%;height:{{ b.h }}%;--i:{{ loop.index0 }}" title="Issue {{ nums[b.id] }}"><b>{{ nums[b.id] }}</b></a>{% endfor %}
+      </div>
+      <div class="imgmeta">
+        <span><b>Alt text:</b> {{ asset.alt_text or 'none' }}</span>
+        <span><b>Text read by:</b> {{ {'tesseract':'Tesseract OCR','ai':'AI vision ('~ai_model~')','stored':'OCR (read when the demo was built)','edited':'a person (corrected by hand)','none':'nobody yet'}.get(asset.ocr_method, asset.ocr_method) }}</span>
+        {% if visual and visual.contrast %}<span><b>Contrast:</b> {{ visual.contrast|selectattr('ok')|list|length }} of {{ visual.contrast|length }} lines pass WCAG AA</span>{% endif %}
+      </div>
+      {% if visual and visual.ocr_note %}<p class="flash info" style="margin:.7rem 0 0">{{ visual.ocr_note }}</p>{% endif %}
+      <details style="margin-top:.8rem" {{ 'open' if asset.ocr_method == 'none' and can_edit }}><summary>Text Canon read from the image</summary>
+        {% if can_edit %}
+        <form method="post" action="{{ url_for('content_imagetext', cid=c.id) }}" style="margin-top:.5rem" data-busy="check" data-busy-title="Re-checking the image text">
+          <textarea name="ocr_text" rows="4" placeholder="Type the text that appears in the image, one line per line">{{ asset.ocr_text }}</textarea>
+          <div class="row" style="margin-top:.4rem"><button class="btn small">Save and re-check</button><small>Correct anything the text reader got wrong.</small></div>
+        </form>
+        {% else %}<div class="ocr" style="margin-top:.5rem">{{ asset.ocr_text or '(none)' }}</div>{% endif %}
+      </details>
+      {% if can_edit %}
+      <details style="margin-top:.4rem" id="replace"><summary>Upload a corrected image</summary>
+        <form method="post" enctype="multipart/form-data" action="{{ url_for('content_image', cid=c.id) }}" style="margin-top:.5rem" data-busy="upload" data-busy-title="Checking the new image">
+          <label class="drop" style="font-weight:500;cursor:pointer;display:block"><input type="file" name="image" accept="image/png,image/jpeg,image/webp" required><span class="hint" data-file>PNG, JPG or WebP, up to 6 MB</span></label>
+          <input type="text" name="alt" maxlength="400" placeholder="Alt text (leave empty to keep the current alt text)" style="margin-top:.5rem">
+          <button class="btn small primary" style="margin-top:.5rem">Upload and re-check</button>
+        </form>
+      </details>
+      {% endif %}
+    </div>
+    {% endif %}
+
     <div class="card" id="comments">
       <h2>Conversation</h2>
       {% for cm in comments %}
-        <div class="item" style="align-items:flex-start"><div><b>{{ cm.name }}</b> <small>{{ role_labels[cm.role] }}, {{ cm.created_at[:16] }}</small><div>{{ cm.body }}</div></div></div>
+        <div class="item" style="align-items:flex-start;justify-content:flex-start;gap:.7rem">{{ avatar(cm) }}<div><b>{{ cm.name }}</b> <small>{{ role_labels[cm.role] }} · {{ cm.created_at[:16] }}</small><div>{{ cm.body }}</div></div></div>
       {% else %}<small>No comments yet.</small>{% endfor %}
-      <form method="post" action="{{ url_for('content_comment', cid=c.id) }}" class="row" style="margin-top:.75rem">
-        <input type="text" name="body" placeholder="Add a comment for the team" style="flex:1">
+      <form method="post" action="{{ url_for('content_comment', cid=c.id) }}" class="row" style="margin-top:.75rem;flex-wrap:nowrap">
+        <input type="text" name="body" maxlength="2000" placeholder="Add a comment for the team" required>
         <button class="btn small">Post</button>
       </form>
     </div>
@@ -82,48 +146,64 @@
 
   <section id="issues">
     <div class="card" style="margin-bottom:1rem">
-      <div class="row spread">
-        <div>
-          <div class="big-num">{{ findings|length }}</div>
-          <small>open issue{{ 's' if findings|length != 1 }}{% if handled %} · {{ handled|length }} handled{% endif %}</small>
-        </div>
-        <div class="row">
-          {% for s in ['high','medium','low'] %}{% set n = findings|selectattr('severity','equalto',s)|list|length %}{% if n %}<span class="badge {{ s }}">{{ n }} {{ s }}</span>{% endif %}{% endfor %}
+      <div class="score">
+        <div class="ring" data-p="{{ score if run else 0 }}" style="--ring:{{ '#1f8a57' if score >= 80 else ('#b8650a' if score >= 50 else '#d1361b') }}"><span>{{ score if run else '–' }}<small>brand fit</small></span></div>
+        <div style="flex:1">
+          <div class="row spread"><div><span class="big-num">{{ findings|length }}</span> <small>open issue{{ 's' if findings|length != 1 }}{% if handled %} · {{ handled|length }} handled{% endif %}</small></div></div>
+          <div class="row" style="margin-top:.4rem">
+            {% for s in ['high','medium','low'] %}{% set n = findings|selectattr('severity','equalto',s)|list|length %}{% if n %}<span class="badge {{ s }}">{{ n }} {{ s }}</span>{% endif %}{% endfor %}
+            {% set img_n = findings|selectattr('target','equalto','image')|list|length %}{% if img_n %}<span class="badge visual">{{ img_n }} in the image</span>{% endif %}
+          </div>
         </div>
       </div>
       {% if run %}
-      <p class="hint" style="margin:.7rem 0 0">
+      <p class="hint" style="margin:.8rem 0 0">
         Last check: version {{ run.version_n }}, {{ run.created_at[:16] }} UTC.
         {% if run.ai_status == 'ok' %}Rule engine + AI review{% if run.ai_dropped %}; {{ run.ai_dropped }} AI suggestion{{ 's' if run.ai_dropped != 1 }} dropped for not citing a valid rule or fact{% endif %}.
         {% else %}Rule engine only. AI review {{ run.ai_status.replace('unavailable: ', 'unavailable (') }}{{ ')' if 'unavailable' in run.ai_status }}.{% endif %}
+        Brand fit starts at 100 and drops 12 / 6 / 2 points per high / medium / low issue.
       </p>
       {% if stale %}<p class="flash info" style="margin:.7rem 0 0">The text changed since the last check. Run <b>Check again</b> to be sure.</p>{% endif %}
       {% else %}
-      <p class="hint" style="margin:.7rem 0 0">Not checked yet. Click <b>Check</b> to review this draft against your brand rules and facts.</p>
+      <p class="hint" style="margin:.7rem 0 0">Not checked yet. Click <b>Check</b> to review this {{ 'piece' if asset else 'draft' }} against your brand rules and facts.</p>
       {% endif %}
     </div>
 
     {% for f in findings %}
     {% set src = sources[f.ref] %}
-    <article class="issue {{ f.severity }}" id="f{{ f.id }}">
+    <article class="issue {{ f.severity }}" id="f{{ f.id }}" style="--i:{{ loop.index0 }}">
       <div class="issue-top">
         <div class="row">
           <span class="badge {{ f.severity }}">{{ nums[f.id] }}. {{ f.severity|capitalize }}</span>
-          <span class="badge {{ f.method }}">{{ 'AI review' if f.method == 'ai' else 'Rule engine' }}</span>
+          {% if f.target == 'image' %}<span class="badge visual">In the image</span>{% endif %}
+          <span class="badge {{ f.method }}">{{ 'AI review' if f.method == 'ai' else ('Measured' if f.ref in ('R-14','R-16') else 'Rule engine') }}</span>
           {% if f.method == 'ai' %}<small>confidence {{ (f.confidence * 100)|round|int }}%</small>{% endif %}
           {% if f.needs_review %}<span class="review-flag">Needs human review</span>{% endif %}
         </div>
         <div class="issue-title">{{ f.issue }}</div>
       </div>
       <div class="source"><b>Why:</b> <span class="chip">{{ f.ref }}</span> {{ src[0].split(' · ',1)[1] if ' · ' in src[0] else src[0] }}<br><small>{{ src[1] }}</small></div>
-      <div class="intent"><b>What the writer meant:</b> {{ f.intent or '—' }}</div>
-      <div class="fix"><span class="fix-label">Suggested fix</span>
-        {% if f.action == 'append' %}<ins>{{ f.fix }}</ins> <small class="muted">(added at the end)</small>
+      <div class="intent"><b>What it's for:</b> {{ f.intent or '—' }}</div>
+      <div class="fix"><span class="fix-label">{{ 'Suggested alt text' if f.action == 'alt' else ('For the designer' if f.action == 'artwork' else 'Suggested fix') }}</span>
+        {% if f.action == 'append' %}<ins>{{ f.fix }}</ins> <small class="muted">(added at the end of the caption)</small>
+        {% elif f.action == 'alt' %}{% if f.fix %}<ins>{{ f.fix }}</ins>{% else %}<small class="muted">Write a sentence describing the image and its key text.{% if not ai_on %} (AI suggestions are off here.){% endif %}</small>{% endif %}
+        {% elif f.action == 'artwork' %}{% if f.ref in ('R-14','R-16') %}{{ f.fix }}{% elif f.fix %}{{ word_diff(f.quote, f.fix) }}{% else %}<del>{{ f.quote }}</del> <small class="muted">(remove)</small>{% endif %}
         {% elif not f.fix %}<del>{{ f.quote }}</del> <small class="muted">(remove)</small>
         {% else %}{{ word_diff(f.quote, f.fix) }}{% endif %}
       </div>
       {% if can_act %}
       <div class="issue-actions">
+        {% if f.action == 'artwork' %}
+          {% if can_edit %}<a class="btn small primary" href="#replace" onclick="document.getElementById('replace').open=true">Upload a corrected image</a>{% endif %}
+        {% elif f.action == 'alt' %}
+          {% if f.fix %}<form method="post" action="{{ url_for('finding_decide', fid=f.id) }}" class="row"><input type="hidden" name="action" value="accept"><button class="btn small primary">Use this alt text</button></form>{% endif %}
+          <details {{ 'open' if not f.fix }}><summary>Write the alt text</summary>
+            <form method="post" action="{{ url_for('finding_decide', fid=f.id) }}">
+              <input type="hidden" name="action" value="edit">
+              <textarea name="fix" rows="2" maxlength="400" required>{{ f.fix }}</textarea>
+              <button class="btn small" style="margin-top:.4rem">Save alt text</button>
+            </form></details>
+        {% else %}
         <form method="post" action="{{ url_for('finding_decide', fid=f.id) }}" class="row">
           <input type="hidden" name="action" value="accept"><button class="btn small primary">Accept fix</button>
         </form>
@@ -133,16 +213,17 @@
             <textarea name="fix" rows="2">{{ f.fix }}</textarea>
             <button class="btn small" style="margin-top:.4rem">Apply my version</button>
           </form></details>
+        {% endif %}
         <details><summary>Keep the original</summary>
           <form method="post" action="{{ url_for('finding_decide', fid=f.id) }}">
             <input type="hidden" name="action" value="reject">
-            <textarea name="reason" rows="2" required placeholder="Why is the original right here? (helps improve unclear rules)"></textarea>
+            <textarea name="reason" rows="2" maxlength="500" required placeholder="Why is the original right here? (helps improve unclear rules)"></textarea>
             <button class="btn small" style="margin-top:.4rem">Keep original</button>
           </form></details>
-        {% if f.action != 'append' %}
+        {% if f.action == 'replace' %}
         <details><summary>That's not what I meant</summary>
-          <form method="post" action="{{ url_for('finding_regenerate', fid=f.id) }}">
-            <input type="text" name="intent" value="{{ f.intent }}">
+          <form method="post" action="{{ url_for('finding_regenerate', fid=f.id) }}" data-busy="ai" data-busy-title="Rewriting the fix">
+            <input type="text" name="intent" maxlength="300" value="{{ f.intent }}">
             <button class="btn small" style="margin-top:.4rem" {{ 'disabled' if not ai_on }}>Rewrite the fix from this intent</button>
             {% if not ai_on %}<div class="hint">Needs the AI, which is off in this deployment. You can edit the fix by hand.</div>{% endif %}
           </form></details>

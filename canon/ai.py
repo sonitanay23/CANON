@@ -7,6 +7,7 @@ Design rules:
 - If the API key is missing or the call fails, callers fall back to
   rule-engine results and show "AI review unavailable".
 """
+import base64
 import json
 import os
 import re
@@ -165,10 +166,13 @@ def _gemini_pick_model(exclude=()):
     return sorted(flash, key=lambda n: ("preview" not in n and "exp" not in n, version(n)), reverse=True)[0]
 
 
-def _gemini_call(system, user, max_tokens):
+def _gemini_call(system, user, max_tokens, image=None):
+    parts = [{"text": user}]
+    if image:
+        parts.insert(0, {"inline_data": {"mime_type": image[1], "data": base64.b64encode(image[0]).decode()}})
     body = {
         "systemInstruction": {"parts": [{"text": system}]},
-        "contents": [{"role": "user", "parts": [{"text": user}]}],
+        "contents": [{"role": "user", "parts": parts}],
         "generationConfig": {"responseMimeType": "application/json", "temperature": 0.2,
                              "maxOutputTokens": max(max_tokens, 4096)},
     }
@@ -195,20 +199,25 @@ def _gemini_call(system, user, max_tokens):
     return text
 
 
-def _anthropic_call(system, user, max_tokens):
+def _anthropic_call(system, user, max_tokens, image=None):
+    content = user
+    if image:
+        content = [{"type": "image", "source": {"type": "base64", "media_type": image[1],
+                                                "data": base64.b64encode(image[0]).decode()}},
+                   {"type": "text", "text": user}]
     body = {"model": model(), "max_tokens": max_tokens, "system": system,
-            "messages": [{"role": "user", "content": user}]}
+            "messages": [{"role": "user", "content": content}]}
     data = _with_retries(lambda: _http(ANTHROPIC_URL, body, {"x-api-key": _key(),
                                                              "anthropic-version": "2023-06-01"}))
     return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
 
 
-def _call(system, user, max_tokens=2500):
+def _call(system, user, max_tokens=2500, image=None):
     if not available():
         raise AIUnavailable("no API key configured")
     if provider() == "gemini":
-        return _gemini_call(system, user, max_tokens)
-    return _anthropic_call(system, user, max_tokens)
+        return _gemini_call(system, user, max_tokens, image)
+    return _anthropic_call(system, user, max_tokens, image)
 
 
 def _parse_json(text):
@@ -220,17 +229,22 @@ def _parse_json(text):
     return json.loads(text[start:])
 
 
-def call_json(system, user, max_tokens=2500):
+def call_json(system, user, max_tokens=2500, image=None):
     """Call the model and parse JSON; retry once on malformed output."""
     last = None
     for _ in range(2):
-        raw = _call(system, user, max_tokens)
+        raw = _call(system, user, max_tokens, image)
         try:
             return _parse_json(raw)
         except (ValueError, json.JSONDecodeError) as e:
             last = e
             user = user + "\n\nYour previous reply was not valid JSON. Reply with JSON only."
     raise AIUnavailable(f"Model returned invalid JSON twice: {last}")
+
+
+def vision_json(system, user, image_bytes, mime):
+    """Ask the model about an image; returns parsed JSON."""
+    return call_json(system, user, max_tokens=2000, image=(image_bytes, mime))
 
 
 REVIEW_SYSTEM = """You are Canon, a brand-governance reviewer. You check a draft against the brand's

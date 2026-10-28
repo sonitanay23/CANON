@@ -4,33 +4,49 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Canon{% endblock %} · Canon</title>
+  <meta name="description" content="Canon checks every draft against your brand's approved rules and facts before it is published.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231a2233'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Georgia' font-weight='700' font-size='18' fill='white'%3EC%3C/text%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%233b5bdb'/%3E%3Cstop offset='.55' stop-color='%236d4aff'/%3E%3Cstop offset='1' stop-color='%23ff6b4a'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='9' fill='url(%23g)'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Georgia' font-weight='700' font-size='18' fill='white'%3EC%3C/text%3E%3C/svg%3E">
+  {% block head %}{% endblock %}
 </head>
 <body>
 <header class="top">
   <div class="top-in">
     <a class="logo" href="{{ url_for('home') }}" aria-label="Canon home"><span class="logo-mark">C</span>Canon</a>
+    {% set ep = request.endpoint or '' %}
     {% if me %}
-    <nav class="nav">
-      {% set ep = request.endpoint or '' %}
-      <a href="{{ url_for('content_list') }}" class="{{ 'on' if ep.startswith('content') or ep in ('impact',) }}">Content</a>
-      <a href="{{ url_for('brand') }}" class="{{ 'on' if ep == 'brand' }}">Brand rules &amp; facts</a>
-      {% if me.role in ('admin', 'reviewer') %}<a href="{{ url_for('insights') }}" class="{{ 'on' if ep == 'insights' }}">Rule insights</a>{% endif %}
-      <a href="{{ url_for('reliability') }}" class="{{ 'on' if ep == 'reliability' }}">Reliability</a>
-      {% if me.role == 'admin' %}<a href="{{ url_for('audit_view') }}" class="{{ 'on' if ep == 'audit_view' }}">Audit log</a>{% endif %}
+    <nav class="nav" aria-label="Main">
+      {% if me.role == 'agency' %}
+        <a href="{{ url_for('partner') }}" class="{{ 'on' if ep == 'partner' }}">Partner workspace</a>
+        <a href="{{ url_for('content_list') }}" class="{{ 'on' if ep.startswith('content') }}">My drafts</a>
+        <a href="{{ url_for('brand') }}" class="{{ 'on' if ep == 'brand' }}">Brand kit</a>
+      {% else %}
+        {% if me.role in ('admin', 'reviewer') %}<a href="{{ url_for('queue') }}" class="{{ 'on' if ep == 'queue' }}">{{ 'Queue' if me.role == 'admin' else 'Review queue' }}{% if queue_count %}<span class="pill">{{ queue_count }}</span>{% endif %}</a>{% endif %}
+        <a href="{{ url_for('content_list') }}" class="{{ 'on' if ep.startswith('content') or ep == 'impact' }}">Content</a>
+        <a href="{{ url_for('brand') }}" class="{{ 'on' if ep == 'brand' }}">{{ 'Brand' if me.role == 'admin' else 'Brand rules &amp; facts'|safe }}</a>
+        {% if me.role in ('admin', 'reviewer') %}
+          <a href="{{ url_for('governance') }}" class="{{ 'on' if ep in ('governance', 'insights') }}">Insights</a>
+          <a href="{{ url_for('briefs') }}" class="{{ 'on' if ep in ('briefs', 'partner') }}">Briefs</a>
+        {% endif %}
+        <a href="{{ url_for('reliability') }}" class="{{ 'on' if ep == 'reliability' }}">Reliability</a>
+        {% if me.role == 'admin' %}<a href="{{ url_for('audit_view') }}" class="{{ 'on' if ep == 'audit_view' }}">Audit</a>{% endif %}
+      {% endif %}
+      <a href="{{ url_for('verify') }}" class="{{ 'on' if ep in ('verify', 'seal_page') }}">Verify</a>
     </nav>
     <div class="who">
       {% if me.role in ('creator', 'agency', 'admin') %}<a class="btn primary small" href="{{ url_for('content_new') }}">+ New draft</a>{% endif %}
-      <span class="avatar">{{ me.name.split()[0][0] }}{{ me.name.split()[-1][0] }}</span>
-      <span class="who-name"><b>{{ me.name }}</b><small>{{ role_labels[me.role] }}</small></span>
+      {{ avatar(me) }}
+      <span class="who-name"><b>{{ me.name }}</b><small>{{ role_label(me) }}</small></span>
       <a class="btn ghost small" href="{{ url_for('login') }}" title="Switch demo account">Switch</a>
     </div>
     {% else %}
-    <nav class="nav"><a href="{{ url_for('trust') }}">How Canon uses AI</a></nav>
+    <nav class="nav" aria-label="Main">
+      <a href="{{ url_for('verify') }}" class="{{ 'on' if ep in ('verify', 'seal_page') }}">Verify content</a>
+      <a href="{{ url_for('trust') }}" class="{{ 'on' if ep == 'trust' }}">How Canon uses AI</a>
+    </nav>
     <a class="btn primary small" href="{{ url_for('login') }}">Try the demo</a>
     {% endif %}
   </div>
@@ -41,21 +57,72 @@
   {% endwith %}
   {% block body %}{% endblock %}
 </main>
+<div class="busy" id="busy" role="alert" aria-live="assertive">
+  <div class="busy-card"><div class="spinner"></div><b id="busy-title">Checking your draft</b><div class="step" id="busy-step">Reading it against your brand rules…</div></div>
+</div>
 <footer>
   <div class="in">
-    <span>Canon, built by Team LazyCoderz. The demo brand {{ brand }} is fictional.</span>
-    <span><span class="dot {{ 'on' if ai_on }}"></span>&nbsp; AI review {{ 'on, ' ~ ai_model if ai_on else 'off, rule-based checks only' }}. <a href="{{ url_for('trust') }}">How Canon uses AI</a></span>
+    <span>Canon, built by Team LazyCoderz for Inkloom AI. The demo brand {{ brand }} is fictional.</span>
+    <span><span class="dot {{ 'on' if ai_on }}"></span>&nbsp; AI review {{ 'on, ' ~ ai_model if ai_on else 'off, rule-based checks only' }} · <a href="{{ url_for('trust') }}">How Canon uses AI</a> · <a href="{{ url_for('verify') }}">Verify content</a></span>
   </div>
 </footer>
 <script>
-  // show progress on slow actions (AI checks take a few seconds)
+(function () {
+  // A progress overlay for slow actions (checks call the AI and can take a few seconds).
+  var busy = document.getElementById('busy'), step = document.getElementById('busy-step'), title = document.getElementById('busy-title');
+  var STEPS = {
+    check: ['Reading it against your brand rules…', 'Comparing numbers with the fact ledger…', 'Asking the AI about tone and claims…', 'Checking the image: text, contrast, logos…', 'Writing minimal fixes…'],
+    upload: ['Uploading…', 'Reading the text in the image…', 'Measuring contrast…', 'Looking for retired logos…', 'Running the brand checks…'],
+    verify: ['Checking the signature…', 'Comparing with approved content…'],
+    ai: ['Asking the AI…', 'Validating its answer…']
+  };
   document.querySelectorAll('form').forEach(function (f) {
-    f.addEventListener('submit', function () {
-      var b = f.querySelector('button:not([name]), button[name="action"]');
-      var slow = /check|regenerate|propose|content\/new/.test(f.action);
-      if (b && slow) { setTimeout(function () { b.disabled = true; b.textContent = 'Checking…'; }, 0); }
+    f.addEventListener('submit', function (e) {
+      if (f.dataset.sent) { e.preventDefault(); return; }       // stop double submits
+      f.dataset.sent = '1';
+      setTimeout(function () { f.querySelectorAll('button').forEach(function (b) { b.disabled = true; }); }, 0);
+      var kind = f.dataset.busy;
+      if (!kind) return;
+      title.textContent = f.dataset.busyTitle || 'Working on it';
+      var list = STEPS[kind] || STEPS.check, i = 0;
+      step.textContent = list[0];
+      busy.classList.add('on');
+      setInterval(function () { i = Math.min(i + 1, list.length - 1); step.textContent = list[i]; }, 1600);
+      var sheet = document.querySelector('.sheet'); if (sheet && kind === 'check') sheet.classList.add('scanning');
     });
   });
+  // Pages restored from the back/forward cache shouldn't stay locked.
+  window.addEventListener('pageshow', function (e) {
+    if (e.persisted) { busy.classList.remove('on'); document.querySelectorAll('form').forEach(function (f) { delete f.dataset.sent; f.querySelectorAll('button').forEach(function (b) { b.disabled = false; }); }); }
+  });
+  // Reveal sections as they scroll into view.
+  var els = document.querySelectorAll('.reveal');
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (es) { es.forEach(function (x) { if (x.isIntersecting) { x.target.classList.add('in'); io.unobserve(x.target); } }); }, { threshold: 0, rootMargin: '0px 0px 80px 0px' });
+    els.forEach(function (el) { io.observe(el); });
+  } else { els.forEach(function (el) { el.classList.add('in'); }); }
+  // Count numbers up from zero.
+  document.querySelectorAll('[data-count]').forEach(function (el) {
+    var end = parseFloat(el.dataset.count), suffix = el.dataset.suffix || '', t0 = null, dur = 900;
+    if (isNaN(end) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    function tick(t) { t0 = t0 || t; var p = Math.min(1, (t - t0) / dur); el.textContent = Math.round(end * (1 - Math.pow(1 - p, 3))) + suffix; if (p < 1) requestAnimationFrame(tick); }
+    el.textContent = '0' + suffix; requestAnimationFrame(tick);
+  });
+  // Score rings fill on load.
+  document.querySelectorAll('.ring[data-p]').forEach(function (r) { requestAnimationFrame(function () { r.style.setProperty('--p', r.dataset.p); }); });
+  // Drop zones: show the chosen file name.
+  document.querySelectorAll('.drop input[type=file]').forEach(function (inp) {
+    var zone = inp.closest('.drop'), label = zone.querySelector('[data-file]');
+    inp.addEventListener('change', function () { if (label && inp.files[0]) label.textContent = inp.files[0].name + ' (' + Math.round(inp.files[0].size / 1024) + ' KB)'; });
+    ['dragenter', 'dragover'].forEach(function (ev) { zone.addEventListener(ev, function () { zone.classList.add('over'); }); });
+    ['dragleave', 'drop'].forEach(function (ev) { zone.addEventListener(ev, function () { zone.classList.remove('over'); }); });
+  });
+  // Copy buttons.
+  document.querySelectorAll('[data-copy]').forEach(function (b) {
+    b.addEventListener('click', function () { var t = b.dataset.copy; (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function () { var o = b.textContent; b.textContent = 'Copied'; setTimeout(function () { b.textContent = o; }, 1400); }).catch(function () {}); });
+  });
+})();
 </script>
+{% block scripts %}{% endblock %}
 </body>
 </html>

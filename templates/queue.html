@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Review queue{% endblock %}
+{% block body %}
+<div class="page-head">
+  <div><div class="eyebrow">Risk-based routing</div><h1>Review queue</h1>
+    <p>Canon scores every submission and picks a lane. Clean, low-risk pieces take the fast lane; anything that makes financial claims goes to Legal. Every score lists its reasons.</p></div>
+  <div class="row"><span class="badge solid">{{ total }} waiting</span>{% if mine %}<span class="badge accent">{{ mine }} assigned to you</span>{% endif %}</div>
+</div>
+
+{% if total == 0 %}
+<div class="card empty"><div class="big">✓</div><b>The queue is empty.</b><br><small>New submissions appear here, sorted by risk. As Riya, check and submit <i>Diwali savings post</i> to see routing in action.</small></div>
+{% else %}
+<div class="grid g3" style="align-items:start;gap:1.2rem">
+{% for key in ['legal', 'standard', 'fast'] %}
+  {% set L = lanes[key] %}
+  <section class="lane {{ key }} reveal" style="--d:{{ loop.index0 }}">
+    <h2>{{ L.label }} <span class="count">{{ by_lane[key]|length }}</span></h2>
+    <small>{{ L.who }} · within {{ L.sla_hours }} h</small>
+    {% if key == 'fast' and by_lane[key] %}
+    <form method="post" action="{{ url_for('fast_approve') }}" style="margin-top:.6rem">
+      {% for it in by_lane[key] %}
+      <label class="item" style="font-weight:400;cursor:pointer">
+        <div class="row" style="flex-wrap:nowrap;min-width:0"><input type="checkbox" name="cid" value="{{ it.c.id }}" {{ 'checked' if it.can and not it.c.open_issues }} {{ 'disabled' if not it.can or it.c.open_issues }} style="width:18px;height:18px;flex:none">
+          <div style="min-width:0"><a class="item-title" href="{{ url_for('content_view', cid=it.c.id) }}">{{ it.c.title }}</a>
+            <div><small>{{ it.c.channel }} · {{ it.c.author_name }} · waiting {{ it.waited|round(1) }} h</small></div></div></div>
+        <span class="risk">{{ it.c.risk }}<span class="bar"><span style="width:{{ (it.c.risk / 20 * 100)|round|int }}%"></span></span></span>
+      </label>
+      {% endfor %}
+      <button class="btn success small" style="margin-top:.7rem">Approve and seal selected</button>
+      <div class="hint">Only pieces with no open issues can be approved from here.</div>
+    </form>
+    {% else %}
+    {% for it in by_lane[key] %}
+      <div class="item" style="flex-direction:column;align-items:stretch;gap:.35rem">
+        <div class="row spread" style="flex-wrap:nowrap">
+          <a class="item-title" href="{{ url_for('content_view', cid=it.c.id) }}">{{ it.c.title }}</a>
+          <span class="risk" title="Risk score out of 20">{{ it.c.risk }}<span class="bar"><span style="width:{{ (it.c.risk / 20 * 100)|round|int }}%"></span></span></span>
+        </div>
+        <div><small>{{ it.c.channel }} · {{ it.c.author_name }}{% if it.c.author_team and 'agency' in it.c.author_team %} <span class="badge visual">Agency</span>{% endif %}{% if it.c.images %} <span class="badge visual">Image</span>{% endif %}</small></div>
+        <ul class="reasons">{% for pts, why in it.reasons[:4] %}<li>{{ why }}</li>{% endfor %}</ul>
+        <div class="row spread">
+          <small>{% if it.mine %}<b style="color:var(--violet)">Assigned to you</b>{% else %}{{ it.c.assignee_name or 'Unassigned' }}{% endif %}</small>
+          <span class="badge {{ 'high' if it.overdue else '' }}">{{ 'Overdue · ' if it.overdue }}{{ it.waited|round(1) }} h</span>
+        </div>
+      </div>
+    {% else %}
+      <div class="empty" style="padding:1.2rem"><small>Nothing in this lane.</small></div>
+    {% endfor %}
+    {% endif %}
+  </section>
+{% endfor %}
+</div>
+<p class="hint" style="margin-top:1.2rem">How the score works: +3 if the latest version isn't checked, +3 per open high-severity issue, +1 per other open issue, +1 per overridden suggestion, +1 for high-reach channels (ads, email, website, sales), +1 for agency work, +1 for images, +1 if AI review was unavailable. Financial claim language, or claim and disclaimer issues, send a piece to Legal whatever its score. Score 2 or less with no open issues: fast lane.</p>
+{% endif %}
+{% endblock %}

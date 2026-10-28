@@ -1,21 +1,48 @@
 {% extends "base.html" %}
 {% block title %}New draft{% endblock %}
 {% block body %}
-<div style="max-width:760px">
+<div style="max-width:820px;margin:0 auto">
+  <div class="eyebrow">New draft</div>
   <h1>What are you publishing?</h1>
-  <p class="muted">Paste your text or upload a PDF. Canon checks it as soon as you save, and nothing is changed without your approval.</p>
-  <form class="card" method="post" enctype="multipart/form-data" style="margin-top:1rem">
+  <p class="muted">Paste your text, upload a PDF, add an image, or all three. Canon checks everything as soon as you save, and nothing changes without your approval.</p>
+
+  {% if brief %}
+  <div class="card soft" style="margin-top:1rem">
+    <div class="row spread"><b>Brief from {{ brand }}: {{ brief.title }}</b>{% if brief.due_on %}<span class="badge accent">Due {{ brief.due_on }}</span>{% endif %}</div>
+    <p style="margin:.4rem 0 0">{{ brief.body }}</p>
+  </div>
+  {% endif %}
+
+  <form class="card" method="post" enctype="multipart/form-data" style="margin-top:1rem" data-busy="upload" data-busy-title="Saving and checking">
+    {% if brief %}<input type="hidden" name="brief" value="{{ brief.id }}">{% endif %}
     <div class="grid g2">
-      <div class="field"><label for="title">Title</label><input type="text" id="title" name="title" placeholder="e.g. Festive offer post" required></div>
+      <div class="field"><label for="title">Title</label><input type="text" id="title" name="title" maxlength="120" value="{{ form.get('title') or (brief.title if brief else '') }}" placeholder="e.g. Festive offer post" required></div>
       <div class="field"><label for="channel">Channel</label>
-        <select id="channel" name="channel">{% for ch in channels %}<option>{{ ch }}</option>{% endfor %}</select></div>
+        <select id="channel" name="channel">{% for ch in channels %}<option {{ 'selected' if ch == (form.get('channel') or (brief.channel if brief else '')) }}>{{ ch }}</option>{% endfor %}</select></div>
     </div>
-    <div class="field" style="margin-top:.9rem"><label for="body">Text</label>
-      <textarea id="body" name="body" rows="9" placeholder="Paste the post, email, ad copy or article here."></textarea></div>
-    <div class="field"><label for="pdf">Or upload a PDF</label><input type="file" id="pdf" name="pdf" accept="application/pdf">
-      <div class="hint">Text is extracted from the PDF. Scanned images aren't supported yet.</div></div>
-    {% if me.role == 'agency' %}<p class="hint" style="margin-top:1rem">You're signed in as an agency partner. Canon checks your draft against the facts the brand has shared with partners; internal facts are never shown to you or sent to the AI for your drafts.</p>{% endif %}
-    <div class="row" style="margin-top:1.1rem"><button class="btn primary">Save and check</button><a class="btn ghost" href="{{ url_for('content_list') }}">Cancel</a></div>
+    <div class="field" style="margin-top:.9rem"><label for="body">Text <small class="muted">(the post, email or caption)</small></label>
+      <textarea id="body" name="body" rows="7" maxlength="20000" placeholder="Paste your draft here">{{ form.get('body', '') }}</textarea></div>
+
+    <div class="grid g2" style="margin-top:1rem">
+      <div>
+        <label>Image <small class="muted">(PNG, JPG or WebP, up to 6 MB)</small></label>
+        <label class="drop" style="font-weight:500;cursor:pointer;display:block">
+          <input type="file" name="image" accept="image/png,image/jpeg,image/webp">
+          <span class="hint" data-file>Canon reads the text in it, checks contrast and logos.</span>
+        </label>
+        <div class="field" style="margin-top:.6rem"><label for="alt">Alt text <small class="muted">(what a screen-reader user should hear)</small></label>
+          <input type="text" id="alt" name="alt" maxlength="400" value="{{ form.get('alt', '') }}" placeholder="Leave empty and Canon will flag it and suggest one"></div>
+      </div>
+      <div>
+        <label>Or a PDF <small class="muted">(its text replaces the text box)</small></label>
+        <label class="drop" style="font-weight:500;cursor:pointer;display:block">
+          <input type="file" name="pdf" accept="application/pdf,.pdf">
+          <span class="hint" data-file>Text-based PDFs only. For scans, upload pages as images.</span>
+        </label>
+      </div>
+    </div>
+    <div class="row" style="margin-top:1.2rem"><button class="btn primary big">Save and check</button>
+      <small>Takes a few seconds with AI review on{{ '' if ai_on else ' (AI is off here, so rule-based checks only)' }}.</small></div>
   </form>
 </div>
 {% endblock %}

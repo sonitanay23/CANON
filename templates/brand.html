@@ -1,9 +1,32 @@
 {% extends "base.html" %}
-{% block title %}Brand rules & facts{% endblock %}
+{% block title %}Brand rules & facts<section class="card" id="logos">
+  <div class="card-head"><div><h2>Logos</h2><small>Canon looks for every retired logo in every image it checks, at any size and on any background.</small></div></div>
+  <div class="grid g4">
+    {% for lg in logos %}
+    <div class="logo-tile {{ lg.status }}">
+      <img src="{{ url_for('logo_file', lid=lg.id) }}" alt="{{ lg.name }}">
+      <div style="margin:.3rem 0"><small><b>{{ lg.name }}</b></small><br><span class="badge {{ 'ok' if lg.status == 'current' else 'high' }}">{{ lg.status|capitalize }}</span></div>
+      {% if admin %}<form method="post" action="{{ url_for('logo_update', lid=lg.id) }}" class="row" style="justify-content:center">
+        <button class="btn small ghost" name="action" value="toggle">Mark {{ 'retired' if lg.status == 'current' else 'current' }}</button>
+        <button class="btn small ghost" name="action" value="delete" onclick="return confirm('Remove this logo?')">Remove</button></form>{% endif %}
+    </div>
+    {% else %}<small>No logos registered.</small>{% endfor %}
+  </div>
+  {% if admin %}
+  <details style="margin-top:1rem"><summary>Add a logo</summary>
+    <form method="post" enctype="multipart/form-data" action="{{ url_for('logo_new') }}" class="grid g3" style="margin-top:.75rem;align-items:end">
+      <div><label>Name</label><input type="text" name="name" maxlength="80" required placeholder="e.g. 2023 festive mark"></div>
+      <div><label>Status</label><select name="status"><option value="retired">Retired (flag it)</option><option value="current">Current</option></select></div>
+      <div><label>Image</label><input type="file" name="logo" accept="image/png,image/jpeg,image/webp" required></div>
+      <div><button class="btn primary">Add logo</button></div>
+    </form></details>
+  {% endif %}
+</section>
+{% endblock %}
 {% block body %}
 {% set admin = me.role == 'admin' %}
 <div class="page-head">
-  <div><div class="eyebrow">{{ brand }} · the source of truth</div><h1>Brand rules &amp; facts</h1>
+  <div><div class="eyebrow">{{ brand }} · the source of truth</div><h1>{{ 'Brand kit' if me.role == 'agency' else 'Brand rules &amp; facts'|safe }}</h1>
     <p>Every issue Canon raises points back to one of these. {% if admin %}Change a fact and Canon shows you every approved piece that still uses the old value.{% else %}Only brand admins can edit them.{% endif %}</p></div>
 </div>
 
@@ -57,7 +80,7 @@
       <td><b>{{ r.title }}</b><div><small>{{ r.text }}</small></div>
         {% if admin %}<details><summary>Edit wording</summary>
           <form method="post" action="{{ url_for('rule_update', rid=r.id) }}" style="margin-top:.4rem"><textarea name="text" rows="2">{{ r.text }}</textarea><button class="btn small" style="margin-top:.3rem">Save</button></form></details>{% endif %}</td>
-      <td>{% if r.type in ('tone','claim') %}<span class="badge ai">AI · {{ r.type }}</span>{% else %}<span class="badge rule">Rule engine · {{ r.type }}</span>{% endif %}</td>
+      <td>{% if r.type in ('tone','claim') %}<span class="badge ai">AI · {{ r.type }}</span>{% elif r.type == 'visual' %}<span class="badge visual">Image check</span>{% else %}<span class="badge rule">Rule engine · {{ r.type }}</span>{% endif %}</td>
       <td><span class="badge {{ r.severity }}">{{ r.severity }}</span></td>
       {% if admin %}<td><form method="post" action="{{ url_for('rule_update', rid=r.id) }}"><input type="hidden" name="toggle" value="1"><button class="btn small ghost">{{ 'Turn off' if r.active else 'Turn on' }}</button></form></td>{% endif %}
     </tr>
@@ -75,6 +98,29 @@
       <div class="field"><label>Word to look for <small>(banned / preferred term)</small></label><input type="text" name="word" placeholder="hassle-free"></div>
       <div class="field"><label>Suggested replacement</label><input type="text" name="replacement" placeholder="simple"></div>
       <div><button class="btn primary">Add rule</button></div>
+    </form></details>
+  {% endif %}
+</section>
+<section class="card" id="logos">
+  <div class="card-head"><div><h2>Logos</h2><small>Canon looks for every retired logo in every image it checks, at any size and on any background.</small></div></div>
+  <div class="grid g4">
+    {% for lg in logos %}
+    <div class="logo-tile {{ lg.status }}">
+      <img src="{{ url_for('logo_file', lid=lg.id) }}" alt="{{ lg.name }}">
+      <div style="margin:.3rem 0"><small><b>{{ lg.name }}</b></small><br><span class="badge {{ 'ok' if lg.status == 'current' else 'high' }}">{{ lg.status|capitalize }}</span></div>
+      {% if admin %}<form method="post" action="{{ url_for('logo_update', lid=lg.id) }}" class="row" style="justify-content:center">
+        <button class="btn small ghost" name="action" value="toggle">Mark {{ 'retired' if lg.status == 'current' else 'current' }}</button>
+        <button class="btn small ghost" name="action" value="delete" onclick="return confirm('Remove this logo?')">Remove</button></form>{% endif %}
+    </div>
+    {% else %}<small>No logos registered.</small>{% endfor %}
+  </div>
+  {% if admin %}
+  <details style="margin-top:1rem"><summary>Add a logo</summary>
+    <form method="post" enctype="multipart/form-data" action="{{ url_for('logo_new') }}" class="grid g3" style="margin-top:.75rem;align-items:end">
+      <div><label>Name</label><input type="text" name="name" maxlength="80" required placeholder="e.g. 2023 festive mark"></div>
+      <div><label>Status</label><select name="status"><option value="retired">Retired (flag it)</option><option value="current">Current</option></select></div>
+      <div><label>Image</label><input type="file" name="logo" accept="image/png,image/jpeg,image/webp" required></div>
+      <div><button class="btn primary">Add logo</button></div>
     </form></details>
   {% endif %}
 </section>

@@ -1,0 +1,143 @@
+{
+ "diwali-banner": [
+  {
+   "text": "velora",
+   "box": [
+    202,
+    125,
+    376,
+    166
+   ]
+  },
+  {
+   "text": "Diwali just got",
+   "box": [
+    86,
+    350,
+    710,
+    440
+   ]
+  },
+  {
+   "text": "brighter.",
+   "box": [
+    86,
+    483,
+    459,
+    573
+   ]
+  },
+  {
+   "text": "Guaranteed returns on every rupee",
+   "box": [
+    82,
+    607,
+    823,
+    648
+   ]
+  },
+  {
+   "text": "Velora Pro now just Rs. 399 a month",
+   "box": [
+    81,
+    665,
+    877,
+    717
+   ]
+  }
+ ],
+ "pro-banner": [
+  {
+   "text": "@ Velora Money",
+   "box": [
+    80,
+    94,
+    471,
+    184
+   ]
+  },
+  {
+   "text": "Clarity over",
+   "box": [
+    84,
+    350,
+    601,
+    439
+   ]
+  },
+  {
+   "text": "your money.",
+   "box": [
+    81,
+    502,
+    632,
+    572
+   ]
+  },
+  {
+   "text": "Velora Pro: Rs. 499 a month",
+   "box": [
+    81,
+    607,
+    694,
+    641
+   ]
+  },
+  {
+   "text": "Priority support and monthly insights",
+   "box": [
+    83,
+    670,
+    795,
+    710
+   ]
+  }
+ ],
+ "pro-banner-edited": [
+  {
+   "text": "@ Velora Money",
+   "box": [
+    80,
+    94,
+    471,
+    184
+   ]
+  },
+  {
+   "text": "Clarity over",
+   "box": [
+    84,
+    350,
+    601,
+    439
+   ]
+  },
+  {
+   "text": "your money.",
+   "box": [
+    81,
+    502,
+    632,
+    572
+   ]
+  },
+  {
+   "text": "Velora Pro: Rs. 299 a month",
+   "box": [
+    81,
+    607,
+    692,
+    641
+   ]
+  },
+  {
+   "text": "Priority support and monthly insights",
+   "box": [
+    83,
+    670,
+    795,
+    710
+   ]
+  }
+ ]
+}

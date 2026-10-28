@@ -11,8 +11,12 @@ SENTENCE_RE = re.compile(r"[^.!?\n]*[.!?]?", re.UNICODE)
 RULE_INTENT = "Keep the same message, using approved brand wording."
 
 
+CURRENCY = re.compile(r"\b(?:rs\.?|inr)\s?", re.I)
+
+
 def _norm(value):
-    return re.sub(r"[\s,+]", "", (value or "").lower())
+    """Compare values loosely: spacing, commas and the rupee written as Rs./INR don't matter."""
+    return re.sub(r"[\s,+]", "", CURRENCY.sub("₹", (value or "").lower()))
 
 
 def sentence_around(text, start, end):

@@ -6,10 +6,11 @@
 <div class="page-head">
   <div><div class="eyebrow">Guideline debugger</div><h1>Which rules are people fighting?</h1>
     <p>Every time someone keeps their original text, they give a reason. When a rule is overridden in {{ rate }}% or more of at least {{ min_n }} decisions, the rule is probably unclear, not the writers. Canon flags it so the brand team can fix the rule.</p></div>
+  <div class="tabs"><a href="{{ url_for('governance') }}">Trends</a><a class="on" href="{{ url_for('insights') }}">Rule debugger</a></div>
 </div>
 
 <div class="grid g3" style="margin-bottom:1rem">
-  <div class="card stat"><div class="n">{{ unclear|length }}</div><div class="l">rule{{ 's' if unclear|length != 1 }} flagged as unclear</div></div>
+  <div class="card stat c3"><div class="n">{{ unclear|length }}</div><div class="l">rule{{ 's' if unclear|length != 1 }} flagged as unclear</div></div>
   <div class="card"><h3>Most-raised issues</h3>
     {% for r in by_ref %}<div class="row spread" style="padding:.2rem 0"><small><span class="chip">{{ r.ref }}</span> {{ names.get(r.ref, '') }}</small><b>{{ r.n }}</b></div>{% else %}<small>No checks run yet.</small>{% endfor %}</div>
   <div class="card"><h3>Issues by team</h3>

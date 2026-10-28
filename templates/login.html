@@ -1,19 +1,19 @@
 {% extends "base.html" %}
 {% block title %}Choose a demo account{% endblock %}
 {% block body %}
-<div style="max-width:640px;margin:1rem auto">
+<div style="max-width:720px;margin:1rem auto">
+  <div class="eyebrow">Demo accounts · no password</div>
   <h1>Who do you want to be?</h1>
-  <p class="muted">Each account sees what its role allows. Start with Riya to check a draft, then switch to Kabir to review, and Ananya to change a fact.</p>
+  <p class="muted">Each account sees what its role allows. A good route: Riya checks and submits a draft, Kabir or Meera reviews it by lane, Ananya changes a fact, and Dev works from the agency side.</p>
   <form method="post" class="stack" style="margin-top:1.25rem">
     <input type="hidden" name="next" value="{{ next }}">
-    {% set what = {'creator': 'Writes drafts, runs checks, accepts or rejects fixes, submits for review.',
-                   'reviewer': 'Works through the review queue, approves or sends back with a note.',
-                   'admin': 'Owns the brand rules and fact ledger, sees rule insights and the audit log.',
-                   'agency': 'External partner. Same tools as a creator, but internal facts stay hidden.'} %}
+    {% set what = {'creator': 'Writes drafts and image posts, runs checks, accepts or rejects fixes, submits for review.',
+                   'admin': 'Owns the brand rules, fact ledger and logos; sends agency briefs; sees insights and the audit log.',
+                   'agency': 'External partner with a dedicated workspace: briefs, brand kit, live checks. Internal facts stay hidden.'} %}
     {% for u in users %}
-    <button class="account" name="uid" value="{{ u.id }}">
-      <span class="avatar">{{ u.name.split()[0][0] }}{{ u.name.split()[-1][0] }}</span>
-      <span><b>{{ u.name }} · {{ role_labels[u.role] }}</b><small class="muted">{{ u.team }} — {{ what[u.role] }}</small></span>
+    <button class="account reveal" style="--d:{{ loop.index0 }}" name="uid" value="{{ u.id }}">
+      {{ avatar(u) }}
+      <span><b>{{ u.name }} · {{ role_label(u) }}</b><small class="muted">{{ u.team }}. {{ what.get(u.role) or ('Approves legal-lane content: financial claims, disclaimers and interest rates.' if (u.team or '').startswith('Legal') else 'Works through the risk-sorted review queue, approves and seals, or sends back with a note.') }}</small></span>
     </button>
     {% endfor %}
   </form>
