@@ -995,11 +995,19 @@ SAMPLES = {"approved": ("pro-banner.png", "Approved Pro banner"), "edited": ("pr
            "draft": ("diwali-banner.png", "Diwali banner draft (never approved)")}
 
 
+def _copy_lines(im, lines):
+    """Drop text that belongs to a logo, exactly as a normal check does, so only the copy is compared."""
+    db = get_db()
+    result = vision.analyse(im, q(db, "SELECT * FROM logos WHERE status='retired'"), ocr_lines=lines,
+                            current_logos=q(db, "SELECT * FROM logos WHERE status='current'"))
+    return [ln["text"] for ln in result["lines"]]
+
+
 def _read_upload_text(im):
     lines, method, _alt, _note = vision.read_text(im)
     if method == "none":
         return None
-    return [ln["text"] for ln in lines]
+    return _copy_lines(im, lines)
 
 
 @app.route("/verify", methods=["GET", "POST"])
@@ -1023,12 +1031,12 @@ def verify():
                 result = {"verdict": "empty"}
             else:
                 try:
-                    stored = json.load(open(os.path.join(app.static_folder, "demo", "ocr.json")))
-                    sample_lines = {k: [ln["text"] for ln in stored.get(v[0][:-4], [])] for k, v in SAMPLES.items()}
+                    with open(os.path.join(app.static_folder, "demo", "ocr.json")) as fh:
+                        stored = json.load(fh)
 
                     def reader(im):
-                        if sample in SAMPLES and sample_lines.get(sample):
-                            return sample_lines[sample]  # the demo samples' text was read once in advance
+                        if sample in SAMPLES and stored.get(SAMPLES[sample][0][:-4]):
+                            return _copy_lines(im, stored[SAMPLES[sample][0][:-4]])  # read once in advance
                         return _read_upload_text(im)
                     result = seals.check_image(db, data, read_text=reader)
                 except vision.BadImage as e:
